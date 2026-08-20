@@ -657,28 +657,84 @@
             </button>
           </div>
 
-          {/* Section 1: AI Engine & Tiered Thresholds */}
+          {/* Section 1: AI Engine & Moderation Strategy */}
           <div className="glass-card p-4 space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">ИИ-Модерация (NVIDIA NIM)</h3>
               <span className="font-mono-code text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
-                Бан: {Math.round(settings.ai_confidence_threshold || 85)}% • Проверка: {Math.round(settings.ai_review_threshold || 50)}%
+                {settings.moderation_mode === 'review_only' ? 'РЕЖИМ: НА РАССМОТРЕНИЕ' : settings.moderation_mode === 'strict_confidence' ? 'РЕЖИМ: БАН 95%+' : `Бан: ${Math.round(settings.ai_confidence_threshold || 85)}%`}
               </span>
+            </div>
+
+            {/* Moderation Strategy Mode Cards */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-slate-300">Стратегия применения санкций:</p>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateField('moderation_mode', 'standard')}
+                  className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
+                    (settings.moderation_mode || 'standard') === 'standard'
+                      ? 'bg-rose-500/15 border-rose-500 text-white shadow-sm shadow-rose-950/50'
+                      : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold">🛡️ Стандарт</span>
+                  <span className="text-[9px] text-slate-400 leading-tight mt-1">
+                    0-50% пропуск<br/>50-85% варн<br/>85%+ бан
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updateField('moderation_mode', 'review_only')}
+                  className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
+                    settings.moderation_mode === 'review_only'
+                      ? 'bg-amber-500/15 border-amber-500 text-white shadow-sm shadow-amber-950/50'
+                      : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold text-amber-300">⚖️ Мягкий</span>
+                  <span className="text-[9px] text-slate-400 leading-tight mt-1">
+                    Всегда на проверку.<br/><strong className="text-amber-300">Без авто-бана!</strong>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updateField('moderation_mode', 'strict_confidence')}
+                  className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
+                    settings.moderation_mode === 'strict_confidence'
+                      ? 'bg-indigo-500/15 border-indigo-500 text-white shadow-sm shadow-indigo-950/50'
+                      : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold text-indigo-300">🎯 Строгий</span>
+                  <span className="text-[9px] text-slate-400 leading-tight mt-1">
+                    Бан только при <strong className="text-indigo-300">95%+</strong> уверенности
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Threshold Legend Bar */}
             <div className="p-2.5 rounded-xl bg-[#07090e] border border-[#1a2233] space-y-1.5">
               <div className="flex justify-between text-[10px] font-mono-code">
                 <span className="text-emerald-400">0% - {Math.round(settings.ai_review_threshold || 50)}%: Пропуск</span>
-                <span className="text-amber-400">{Math.round(settings.ai_review_threshold || 50)}% - {Math.round(settings.ai_confidence_threshold || 85)}%: Проверка</span>
-                <span className="text-rose-400">{Math.round(settings.ai_confidence_threshold || 85)}%+: БАН</span>
+                <span className="text-amber-400">
+                  {Math.round(settings.ai_review_threshold || 50)}% - {settings.moderation_mode === 'strict_confidence' ? '95' : settings.moderation_mode === 'review_only' ? '100' : Math.round(settings.ai_confidence_threshold || 85)}%: Проверка
+                </span>
+                <span className="text-rose-400">
+                  {settings.moderation_mode === 'review_only' ? 'Авто-бан отключен' : `${settings.moderation_mode === 'strict_confidence' ? '95' : Math.round(settings.ai_confidence_threshold || 85)}%+: БАН`}
+                </span>
               </div>
               <div className="w-full h-2 rounded-full bg-slate-800 flex overflow-hidden">
                 <div style={{ width: `${settings.ai_review_threshold || 50}%` }} className="bg-emerald-500/80 h-full"></div>
-                <div style={{ width: `${(settings.ai_confidence_threshold || 85) - (settings.ai_review_threshold || 50)}%` }} className="bg-amber-500/80 h-full"></div>
-                <div style={{ width: `${100 - (settings.ai_confidence_threshold || 85)}%` }} className="bg-rose-500/90 h-full"></div>
+                <div style={{ width: `${(settings.moderation_mode === 'strict_confidence' ? 95 : settings.moderation_mode === 'review_only' ? 100 : (settings.ai_confidence_threshold || 85)) - (settings.ai_review_threshold || 50)}%` }} className="bg-amber-500/80 h-full"></div>
+                <div style={{ width: `${settings.moderation_mode === 'review_only' ? 0 : 100 - (settings.moderation_mode === 'strict_confidence' ? 95 : (settings.ai_confidence_threshold || 85))}%` }} className="bg-rose-500/90 h-full"></div>
               </div>
             </div>
+
 
             {/* Slider 1: Ban Threshold */}
             <div className="space-y-1 pt-1">

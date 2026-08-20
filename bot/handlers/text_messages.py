@@ -107,39 +107,46 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     if not verdict.is_violation:
         return
 
-    # 8. Tiered AI Action Enforcement
-    # Thresholds:
-    # - Confidence < ai_review_threshold (default <50%): Ignore (Clean/Borderline)
-    # - Confidence >= ai_review_threshold and < ai_confidence_threshold (50-85%): Review/Warning/Delete
-    # - Confidence >= ai_confidence_threshold (>=85%): Hard Sanction (Ban/Mute)
+    # 8. Tiered AI Action Enforcement with Moderation Mode Strategy
+    mod_mode = getattr(chat_db, 'moderation_mode', 'standard') or 'standard'
     ban_threshold = chat_db.ai_confidence_threshold or 85.0
     review_threshold = getattr(chat_db, 'ai_review_threshold', 50.0) or 50.0
 
+    if mod_mode == "strict_confidence":
+        ban_threshold = max(ban_threshold, 95.0)
+
     if verdict.confidence < review_threshold:
-        return  # Under 50%: Clean message, pass
+        return  # Under review threshold: Clean message, pass
 
     # Always instant ban severe contraband regardless of lower threshold
     is_severe_contraband = (verdict.category == ViolationCategory.ILLEGAL_CONTRABAND)
 
-    logger.info(f"AI violation flagged in chat {chat_id} by user {user_id}: {verdict.category} ({verdict.confidence}%)")
+    logger.info(f"AI violation flagged in chat {chat_id} by user {user_id}: {verdict.category} ({verdict.confidence}%), mode={mod_mode}")
 
     # Delete offending message
     await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
 
-    # Enforce action based on confidence tier
-    if verdict.confidence >= ban_threshold or is_severe_contraband:
-        # Tier 3 (85%+ or CSAM/Contraband): Ban / Hard Mute
+    # Determine if ban/mute should be applied or purely soft review
+    should_hard_punish = False
+    if mod_mode == "review_only":
+        should_hard_punish = False  # Never auto-ban in Review-Only mode
+    elif is_severe_contraband or verdict.confidence >= ban_threshold:
+        should_hard_punish = True
+
+    # Enforce action based on strategy
+    if should_hard_punish:
+        # Hard Sanction (Ban / Mute)
         if verdict.suggested_action == SuggestedAction.BAN_USER or verdict.category in (
             ViolationCategory.CRYPTO_SCAM,
             ViolationCategory.PHISHING,
             ViolationCategory.ILLEGAL_CONTRABAND,
         ):
             await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
-            action_title = "Удаление + БАН (85%+ Уверенность)"
+            action_title = f"Удаление + БАН ({int(verdict.confidence)}% Уверенность)"
             action_type = "ban_user"
         elif verdict.suggested_action == SuggestedAction.MUTE_USER:
             await SanctionsExecutor.mute_user(message.bot, session, chat_id, user_db, duration_minutes=chat_db.warn_mute_duration_minutes or 1440, reason=verdict.reason)
-            action_title = "Удаление + МУТ (85%+ Уверенность)"
+            action_title = f"Удаление + МУТ ({int(verdict.confidence)}% Уверенность)"
             action_type = "mute_user"
         else:
             await SanctionsExecutor.apply_warn(
@@ -154,7 +161,7 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
             action_title = "Удаление + Варн"
             action_type = "warn"
     else:
-        # Tier 2 (50-85%): Warning / Message deletion on verification
+        # Soft Sanction (Warning / On Review)
         await SanctionsExecutor.apply_warn(
             bot=message.bot,
             session=session,
@@ -164,7 +171,10 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
             category=verdict.category.value,
             message_id=message.message_id,
         )
-        action_title = "Удаление + Предупреждение (50-85% На проверке)"
+        if mod_mode == "review_only":
+            action_title = f"Удаление + На рассмотрение (Мягкий режим, {int(verdict.confidence)}%)"
+        else:
+            action_title = f"Удаление + Предупреждение ({int(verdict.confidence)}% На проверке)"
         action_type = "warn"
 
     # Record in Audit Logs

@@ -29,6 +29,7 @@ class ChatSettingsResponseSchema(BaseModel):
     allow_via_bot: bool
     newbie_media_lock_hours: int
     ai_moderation_enabled: bool
+    moderation_mode: str
     ai_confidence_threshold: float
     ai_review_threshold: float
     ai_sampling_rate: float
@@ -62,6 +63,7 @@ class ChatSettingsUpdateSchema(BaseModel):
     allow_via_bot: Optional[bool] = None
     newbie_media_lock_hours: Optional[int] = None
     ai_moderation_enabled: Optional[bool] = None
+    moderation_mode: Optional[str] = None
     ai_confidence_threshold: Optional[float] = Field(None, ge=50.0, le=99.0)
     ai_review_threshold: Optional[float] = Field(None, ge=20.0, le=85.0)
     ai_sampling_rate: Optional[float] = Field(None, ge=0.0, le=1.0)
