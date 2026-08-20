@@ -57,7 +57,8 @@ async def init_db() -> None:
 
         # Automatic schema column migrations for PostgreSQL
         migrations = [
-            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS moderation_mode VARCHAR(32) DEFAULT 'standard'",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS moderation_mode VARCHAR(32) DEFAULT 'ai_judge'",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS category_actions JSONB DEFAULT '{\"toxic_insult\":\"ai_default\",\"commercial_ad\":\"ai_default\",\"flood_spam\":\"ai_default\",\"crypto_scam\":\"ban\",\"phishing\":\"ban\",\"illegal_contraband\":\"ban\"}'::jsonb",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS ai_review_threshold FLOAT DEFAULT 50.0",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS full_scan_enabled BOOLEAN DEFAULT FALSE",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_nsfw_filter_enabled BOOLEAN DEFAULT TRUE",

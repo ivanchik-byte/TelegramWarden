@@ -665,31 +665,46 @@
             </button>
           </div>
 
-          {/* Section 1: AI Engine & Moderation Strategy */}
+          {/* Section 1: AI Engine & Autonomous AI Judge */}
           <div className="glass-card p-4 space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">ИИ-Модерация (NVIDIA NIM)</h3>
               <span className="font-mono-code text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
-                {settings.moderation_mode === 'review_only' ? 'РЕЖИМ: НА РАССМОТРЕНИЕ' : settings.moderation_mode === 'strict_confidence' ? 'РЕЖИМ: БАН 95%+' : `Бан: ${Math.round(settings.ai_confidence_threshold || 85)}%`}
+                {settings.moderation_mode === 'ai_judge' ? 'РЕЖИМ: АВТОНОМНЫЙ ИИ-СУДЬЯ' : settings.moderation_mode === 'review_only' ? 'РЕЖИМ: НА РАССМОТРЕНИЕ' : settings.moderation_mode === 'strict_confidence' ? 'РЕЖИМ: БАН 95%+' : `Бан: ${Math.round(settings.ai_confidence_threshold || 85)}%`}
               </span>
             </div>
 
             {/* Moderation Strategy Mode Cards */}
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold text-slate-300">Стратегия применения санкций:</p>
-              <div className="grid grid-cols-3 gap-2">
+              <p className="text-[11px] font-semibold text-slate-300">Режим принятия решений:</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateField('moderation_mode', 'ai_judge')}
+                  className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
+                    (settings.moderation_mode || 'ai_judge') === 'ai_judge'
+                      ? 'bg-rose-500/20 border-rose-500 text-white shadow-md shadow-rose-950/60'
+                      : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold flex items-center gap-1">🤖 Автономный ИИ-Судья</span>
+                  <span className="text-[9px] text-slate-400 leading-tight mt-1">
+                    ИИ сам взвешивает контекст и выносит соразмерный вердикт
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => updateField('moderation_mode', 'standard')}
                   className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                    (settings.moderation_mode || 'standard') === 'standard'
-                      ? 'bg-rose-500/15 border-rose-500 text-white shadow-sm shadow-rose-950/50'
+                    settings.moderation_mode === 'standard'
+                      ? 'bg-rose-500/20 border-rose-500 text-white shadow-md shadow-rose-950/60'
                       : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[11px] font-bold">🛡️ Стандарт</span>
+                  <span className="text-[11px] font-bold">🛡️ Пороги %</span>
                   <span className="text-[9px] text-slate-400 leading-tight mt-1">
-                    0-50% пропуск<br/>50-85% варн<br/>85%+ бан
+                    Фиксированные числа (0-50% пропуск, 50-85% варн, 85%+ бан)
                   </span>
                 </button>
 
@@ -698,13 +713,13 @@
                   onClick={() => updateField('moderation_mode', 'review_only')}
                   className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
                     settings.moderation_mode === 'review_only'
-                      ? 'bg-amber-500/15 border-amber-500 text-white shadow-sm shadow-amber-950/50'
+                      ? 'bg-amber-500/20 border-amber-500 text-white shadow-md shadow-amber-950/60'
                       : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[11px] font-bold text-amber-300">⚖️ Мягкий</span>
+                  <span className="text-[11px] font-bold text-amber-300">⚖️ Мягкий (Без бана)</span>
                   <span className="text-[9px] text-slate-400 leading-tight mt-1">
-                    Всегда на проверку.<br/><strong className="text-amber-300">Без авто-бана!</strong>
+                    Всегда только варн/удаление. Без авто-бана!
                   </span>
                 </button>
 
@@ -713,66 +728,179 @@
                   onClick={() => updateField('moderation_mode', 'strict_confidence')}
                   className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
                     settings.moderation_mode === 'strict_confidence'
-                      ? 'bg-indigo-500/15 border-indigo-500 text-white shadow-sm shadow-indigo-950/50'
+                      ? 'bg-indigo-500/20 border-indigo-500 text-white shadow-md shadow-indigo-950/60'
                       : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[11px] font-bold text-indigo-300">🎯 Строгий</span>
+                  <span className="text-[11px] font-bold text-indigo-300">🎯 Строгий 95%+</span>
                   <span className="text-[9px] text-slate-400 leading-tight mt-1">
-                    Бан только при <strong className="text-indigo-300">95%+</strong> уверенности
+                    Бан только при 95%+ доказанном спаме/криминале
                   </span>
                 </button>
               </div>
             </div>
 
-            {/* Threshold Legend Bar */}
-            <div className="p-2.5 rounded-xl bg-[#07090e] border border-[#1a2233] space-y-1.5">
-              <div className="flex justify-between text-[10px] font-mono-code">
-                <span className="text-emerald-400">0% - {Math.round(settings.ai_review_threshold || 50)}%: Пропуск</span>
-                <span className="text-amber-400">
-                  {Math.round(settings.ai_review_threshold || 50)}% - {settings.moderation_mode === 'strict_confidence' ? '95' : settings.moderation_mode === 'review_only' ? '100' : Math.round(settings.ai_confidence_threshold || 85)}%: Проверка
-                </span>
-                <span className="text-rose-400">
-                  {settings.moderation_mode === 'review_only' ? 'Авто-бан отключен' : `${settings.moderation_mode === 'strict_confidence' ? '95' : Math.round(settings.ai_confidence_threshold || 85)}%+: БАН`}
-                </span>
+            {/* Custom Category Actions / Настроить наказания самому */}
+            <div className="space-y-3 pt-2 border-t border-[#1a2233]">
+              <div className="flex justify-between items-center">
+                <p className="text-[11px] font-bold text-slate-200 uppercase tracking-wider">
+                  Настройка наказаний по категориям:
+                </p>
+                <span className="text-[10px] text-rose-400 font-mono-code">Кастомные правила</span>
               </div>
-              <div className="w-full h-2 rounded-full bg-slate-800 flex overflow-hidden">
-                <div style={{ width: `${settings.ai_review_threshold || 50}%` }} className="bg-emerald-500/80 h-full"></div>
-                <div style={{ width: `${(settings.moderation_mode === 'strict_confidence' ? 95 : settings.moderation_mode === 'review_only' ? 100 : (settings.ai_confidence_threshold || 85)) - (settings.ai_review_threshold || 50)}%` }} className="bg-amber-500/80 h-full"></div>
-                <div style={{ width: `${settings.moderation_mode === 'review_only' ? 0 : 100 - (settings.moderation_mode === 'strict_confidence' ? 95 : (settings.ai_confidence_threshold || 85))}%` }} className="bg-rose-500/90 h-full"></div>
+
+              {/* 1. Toxic Insult Rule */}
+              <div className="p-3 bg-[#07090e] rounded-xl border border-[#1a2233] space-y-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-bold text-slate-200">Оскорбления и токсичность</p>
+                    <p className="text-[10px] text-slate-400">Мат, травля, агрессия в адрес участников</p>
+                  </div>
+                  <span className="font-mono-code text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                    {(settings.category_actions || {}).toxic_insult === 'ignore' ? 'НЕ УДАЛЯТЬ' : (settings.category_actions || {}).toxic_insult === 'delete' ? 'ТОЛЬКО УДАЛИТЬ' : (settings.category_actions || {}).toxic_insult === 'mute' ? 'МУТ' : (settings.category_actions || {}).toxic_insult === 'ban' ? 'БАН' : (settings.category_actions || {}).toxic_insult === 'warn' ? 'ВАРН' : 'ИИ РЕШАЕТ'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
+                  {[
+                    { id: 'ai_default', label: '🤖 ИИ решает' },
+                    { id: 'ignore', label: '👁️ Не удалять' },
+                    { id: 'delete', label: '🗑️ Удалить' },
+                    { id: 'warn', label: '⚠️ Варн' },
+                    { id: 'mute', label: '🔇 Мут' },
+                    { id: 'ban', label: '⛔ Бан' },
+                  ].map(act => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => {
+                        const cur = { ...(settings.category_actions || {}) };
+                        cur.toxic_insult = act.id;
+                        updateField('category_actions', cur);
+                      }}
+                      className={`py-1.5 px-2 rounded-lg border transition-all ${
+                        ((settings.category_actions || {}).toxic_insult || 'ai_default') === act.id
+                          ? 'bg-rose-500 text-white border-rose-500 font-bold'
+                          : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Commercial Ad Rule */}
+              <div className="p-3 bg-[#07090e] rounded-xl border border-[#1a2233] space-y-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-bold text-slate-200">Реклама и промо-ссылки</p>
+                    <p className="text-[10px] text-slate-400">Ссылки на каналы, ботов, несанкционированный пиар</p>
+                  </div>
+                  <span className="font-mono-code text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                    {(settings.category_actions || {}).commercial_ad === 'ignore' ? 'НЕ УДАЛЯТЬ' : (settings.category_actions || {}).commercial_ad === 'delete' ? 'ТОЛЬКО УДАЛИТЬ' : (settings.category_actions || {}).commercial_ad === 'mute' ? 'МУТ' : (settings.category_actions || {}).commercial_ad === 'ban' ? 'БАН' : (settings.category_actions || {}).commercial_ad === 'warn' ? 'ВАРН' : 'ИИ РЕШАЕТ'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
+                  {[
+                    { id: 'ai_default', label: '🤖 ИИ решает' },
+                    { id: 'ignore', label: '👁️ Не удалять' },
+                    { id: 'delete', label: '🗑️ Удалить' },
+                    { id: 'warn', label: '⚠️ Варн' },
+                    { id: 'mute', label: '🔇 Мут' },
+                    { id: 'ban', label: '⛔ Бан' },
+                  ].map(act => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => {
+                        const cur = { ...(settings.category_actions || {}) };
+                        cur.commercial_ad = act.id;
+                        updateField('category_actions', cur);
+                      }}
+                      className={`py-1.5 px-2 rounded-lg border transition-all ${
+                        ((settings.category_actions || {}).commercial_ad || 'ai_default') === act.id
+                          ? 'bg-rose-500 text-white border-rose-500 font-bold'
+                          : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Crypto Scam Rule */}
+              <div className="p-3 bg-[#07090e] rounded-xl border border-[#1a2233] space-y-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-bold text-slate-200">Крипто-скам и фишинг</p>
+                    <p className="text-[10px] text-slate-400">Раздачи TON/USDT, фейк-боты, вредоносные ссылки</p>
+                  </div>
+                  <span className="font-mono-code text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
+                    {(settings.category_actions || {}).crypto_scam === 'warn' ? 'ВАРН' : (settings.category_actions || {}).crypto_scam === 'mute' ? 'МУТ' : 'БАН'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
+                  {[
+                    { id: 'ban', label: '⛔ Бан' },
+                    { id: 'mute', label: '🔇 Мут' },
+                    { id: 'warn', label: '⚠️ Варн' },
+                  ].map(act => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => {
+                        const cur = { ...(settings.category_actions || {}) };
+                        cur.crypto_scam = act.id;
+                        updateField('category_actions', cur);
+                      }}
+                      className={`py-1.5 px-2 rounded-lg border transition-all ${
+                        ((settings.category_actions || {}).crypto_scam || 'ban') === act.id
+                          ? 'bg-rose-500 text-white border-rose-500 font-bold'
+                          : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
+            {/* Threshold Sliders (shown when standard mode is active) */}
+            {settings.moderation_mode === 'standard' && (
+              <div className="space-y-3 pt-2 border-t border-[#1a2233]">
+                {/* Slider 1: Ban Threshold */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-300 font-semibold">Порог авто-бана</span>
+                    <span className="font-mono-code text-rose-400 font-bold">{Math.round(settings.ai_confidence_threshold || 85)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="60"
+                    max="98"
+                    value={settings.ai_confidence_threshold || 85}
+                    onChange={(e) => updateField('ai_confidence_threshold', Number(e.target.value))}
+                  />
+                </div>
 
-            {/* Slider 1: Ban Threshold */}
-            <div className="space-y-1 pt-1">
-              <div className="flex justify-between text-[11px]">
-                <span className="text-slate-300 font-semibold">Порог авто-бана (Жесткие санкции)</span>
-                <span className="font-mono-code text-rose-400 font-bold">{Math.round(settings.ai_confidence_threshold || 85)}%</span>
+                {/* Slider 2: Review/Warn Threshold */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-300 font-semibold">Порог проверки и предупреждений</span>
+                    <span className="font-mono-code text-amber-400 font-bold">{Math.round(settings.ai_review_threshold || 50)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="25"
+                    max="75"
+                    value={settings.ai_review_threshold || 50}
+                    onChange={(e) => updateField('ai_review_threshold', Number(e.target.value))}
+                  />
+                </div>
               </div>
-              <input
-                type="range"
-                min="60"
-                max="98"
-                value={settings.ai_confidence_threshold || 85}
-                onChange={(e) => updateField('ai_confidence_threshold', Number(e.target.value))}
-              />
-            </div>
-
-            {/* Slider 2: Review/Warn Threshold */}
-            <div className="space-y-1 pt-1">
-              <div className="flex justify-between text-[11px]">
-                <span className="text-slate-300 font-semibold">Порог проверки и предупреждений</span>
-                <span className="font-mono-code text-amber-400 font-bold">{Math.round(settings.ai_review_threshold || 50)}%</span>
-              </div>
-              <input
-                type="range"
-                min="25"
-                max="75"
-                value={settings.ai_review_threshold || 50}
-                onChange={(e) => updateField('ai_review_threshold', Number(e.target.value))}
-              />
-            </div>
+            )}
 
             <div className="divide-y divide-[#1a2233] pt-1">
               <div className="flex items-center justify-between py-3">
@@ -825,6 +953,7 @@
               </div>
             </div>
           </div>
+
 
 
           {/* Section 2: Gatekeeper & Access */}

@@ -107,75 +107,116 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     if not verdict.is_violation:
         return
 
-    # 8. Tiered AI Action Enforcement with Moderation Mode Strategy
-    mod_mode = getattr(chat_db, 'moderation_mode', 'standard') or 'standard'
+    # 8. Tiered AI Action Enforcement with Category Overrides & AI Judge Mode
+    category_actions = chat_db.category_actions or {}
+    cat_key = verdict.category.value if hasattr(verdict.category, 'value') else str(verdict.category)
+    custom_action = category_actions.get(cat_key, "ai_default")
+
+    # Custom override: Ignore category completely (e.g. "не удалять оскорбления")
+    if custom_action == "ignore":
+        logger.info(f"Category '{cat_key}' is set to IGNORE in chat {chat_id}. Message passed.")
+        return
+
+    mod_mode = getattr(chat_db, 'moderation_mode', 'ai_judge') or 'ai_judge'
     ban_threshold = chat_db.ai_confidence_threshold or 85.0
     review_threshold = getattr(chat_db, 'ai_review_threshold', 50.0) or 50.0
 
     if mod_mode == "strict_confidence":
         ban_threshold = max(ban_threshold, 95.0)
 
-    if verdict.confidence < review_threshold:
+    # Check if confidence meets minimum review threshold (unless AI Judge decided action)
+    if mod_mode != "ai_judge" and verdict.confidence < review_threshold and custom_action == "ai_default":
         return  # Under review threshold: Clean message, pass
 
     # Always instant ban severe contraband regardless of lower threshold
     is_severe_contraband = (verdict.category == ViolationCategory.ILLEGAL_CONTRABAND)
 
-    logger.info(f"AI violation flagged in chat {chat_id} by user {user_id}: {verdict.category} ({verdict.confidence}%), mode={mod_mode}")
+    logger.info(f"AI violation flagged in chat {chat_id} by user {user_id}: {cat_key} ({verdict.confidence}%), mode={mod_mode}, custom_action={custom_action}")
 
     # Delete offending message
     await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
 
-    # Determine if ban/mute should be applied or purely soft review
-    should_hard_punish = False
-    if mod_mode == "review_only":
-        should_hard_punish = False  # Never auto-ban in Review-Only mode
-    elif is_severe_contraband or verdict.confidence >= ban_threshold:
-        should_hard_punish = True
-
-    # Enforce action based on strategy
-    if should_hard_punish:
-        # Hard Sanction (Ban / Mute)
-        if verdict.suggested_action == SuggestedAction.BAN_USER or verdict.category in (
-            ViolationCategory.CRYPTO_SCAM,
-            ViolationCategory.PHISHING,
-            ViolationCategory.ILLEGAL_CONTRABAND,
-        ):
-            await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
-            action_title = f"Удаление + БАН ({int(verdict.confidence)}% Уверенность)"
-            action_type = "ban_user"
-        elif verdict.suggested_action == SuggestedAction.MUTE_USER:
-            await SanctionsExecutor.mute_user(message.bot, session, chat_id, user_db, duration_minutes=chat_db.warn_mute_duration_minutes or 1440, reason=verdict.reason)
-            action_title = f"Удаление + МУТ ({int(verdict.confidence)}% Уверенность)"
-            action_type = "mute_user"
-        else:
-            await SanctionsExecutor.apply_warn(
-                bot=message.bot,
-                session=session,
-                chat_db=chat_db,
-                user_db=user_db,
-                reason=verdict.reason,
-                category=verdict.category.value,
-                message_id=message.message_id,
-            )
-            action_title = "Удаление + Варн"
-            action_type = "warn"
-    else:
-        # Soft Sanction (Warning / On Review)
+    # If custom action is explicitly set by admin, enforce it directly
+    if custom_action == "delete":
+        action_title = "Удаление сообщения"
+        action_type = "delete"
+    elif custom_action == "warn":
         await SanctionsExecutor.apply_warn(
             bot=message.bot,
             session=session,
             chat_db=chat_db,
             user_db=user_db,
             reason=verdict.reason,
-            category=verdict.category.value,
+            category=cat_key,
             message_id=message.message_id,
         )
-        if mod_mode == "review_only":
-            action_title = f"Удаление + На рассмотрение (Мягкий режим, {int(verdict.confidence)}%)"
-        else:
-            action_title = f"Удаление + Предупреждение ({int(verdict.confidence)}% На проверке)"
+        action_title = "Удаление + Варн (По правилу чата)"
         action_type = "warn"
+    elif custom_action == "mute":
+        await SanctionsExecutor.mute_user(message.bot, session, chat_id, user_db, duration_minutes=chat_db.warn_mute_duration_minutes or 1440, reason=verdict.reason)
+        action_title = f"Удаление + МУТ (По правилу чата)"
+        action_type = "mute_user"
+    elif custom_action == "ban":
+        await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
+        action_title = "Удаление + БАН (По правилу чата)"
+        action_type = "ban_user"
+    else:
+        # Autonomous AI Judge or Strategy Mode
+        if mod_mode == "ai_judge":
+            # AI Judge decides autonomously
+            if is_severe_contraband or verdict.suggested_action == SuggestedAction.BAN_USER:
+                await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
+                action_title = f"Удаление + БАН (Вердикт ИИ-Судьи)"
+                action_type = "ban_user"
+            elif verdict.suggested_action == SuggestedAction.MUTE_USER:
+                await SanctionsExecutor.mute_user(message.bot, session, chat_id, user_db, duration_minutes=chat_db.warn_mute_duration_minutes or 1440, reason=verdict.reason)
+                action_title = f"Удаление + МУТ (Вердикт ИИ-Судьи)"
+                action_type = "mute_user"
+            elif verdict.suggested_action == SuggestedAction.DELETE_MESSAGE:
+                action_title = "Удаление (Вердикт ИИ-Судьи)"
+                action_type = "delete"
+            else:
+                await SanctionsExecutor.apply_warn(
+                    bot=message.bot,
+                    session=session,
+                    chat_db=chat_db,
+                    user_db=user_db,
+                    reason=verdict.reason,
+                    category=cat_key,
+                    message_id=message.message_id,
+                )
+                action_title = f"Удаление + Варн (Вердикт ИИ-Судьи, {int(verdict.confidence)}%)"
+                action_type = "warn"
+        elif mod_mode == "review_only":
+            await SanctionsExecutor.apply_warn(
+                bot=message.bot,
+                session=session,
+                chat_db=chat_db,
+                user_db=user_db,
+                reason=verdict.reason,
+                category=cat_key,
+                message_id=message.message_id,
+            )
+            action_title = f"Удаление + На рассмотрение (Мягкий режим, {int(verdict.confidence)}%)"
+            action_type = "warn"
+        elif is_severe_contraband or verdict.confidence >= ban_threshold:
+            # High Confidence Tier -> Ban
+            await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
+            action_title = f"Удаление + БАН ({int(verdict.confidence)}% Уверенность)"
+            action_type = "ban_user"
+        else:
+            # Review Tier -> Warn
+            await SanctionsExecutor.apply_warn(
+                bot=message.bot,
+                session=session,
+                chat_db=chat_db,
+                user_db=user_db,
+                reason=verdict.reason,
+                category=cat_key,
+                message_id=message.message_id,
+            )
+            action_title = f"Удаление + Предупреждение ({int(verdict.confidence)}% На проверке)"
+            action_type = "warn"
 
     # Record in Audit Logs
     audit_entry = AuditLog(
