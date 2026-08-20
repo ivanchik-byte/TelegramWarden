@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  test:
+    name: Run Pytest Suite
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: warden_user
+          POSTGRES_PASSWORD: warden_secure_password
+          POSTGRES_DB: warden_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-mock
+
+      - name: Run tests
+        env:
+          BOT_TOKEN: "123456789:ABCDefghIJKlmnoPQRstuvWXYZ_1234567"
+          BOT_USERNAME: "TelegramWardenBot"
+          DATABASE_URL: "postgresql+asyncpg://warden_user:warden_secure_password@localhost:5432/warden_db"
+          REDIS_URL: "redis://localhost:6379/0"
+          DEEPSEEK_API_KEY: "test_key"
+          SECRET_KEY: "test_secret_key_for_testing_purposes_only"
+        run: |
+          pytest tests/ -v

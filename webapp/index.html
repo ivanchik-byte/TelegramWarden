@@ -668,9 +668,9 @@
           {/* Section 1: AI Engine & Autonomous AI Judge */}
           <div className="glass-card p-4 space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">ИИ-Модерация (NVIDIA NIM)</h3>
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Модерация сообщений</h3>
               <span className="font-mono-code text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
-                {settings.moderation_mode === 'ai_judge' ? 'РЕЖИМ: АВТОНОМНЫЙ ИИ-СУДЬЯ' : settings.moderation_mode === 'review_only' ? 'РЕЖИМ: НА РАССМОТРЕНИЕ' : settings.moderation_mode === 'strict_confidence' ? 'РЕЖИМ: БАН 95%+' : `Бан: ${Math.round(settings.ai_confidence_threshold || 85)}%`}
+                {settings.moderation_mode === 'ai_judge' ? 'АВТО-РЕЖИМ' : settings.moderation_mode === 'review_only' ? 'РЕЖИМ: НА РАССМОТРЕНИЕ' : settings.moderation_mode === 'strict_confidence' ? 'РЕЖИМ: БАН 95%+' : `Бан: ${Math.round(settings.ai_confidence_threshold || 85)}%`}
               </span>
             </div>
 
@@ -687,9 +687,9 @@
                       : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[11px] font-bold flex items-center gap-1">🤖 Автономный ИИ-Судья</span>
+                  <span className="text-[11px] font-bold flex items-center gap-1">⚡ Авто-оценка</span>
                   <span className="text-[9px] text-slate-400 leading-tight mt-1">
-                    ИИ сам взвешивает контекст и выносит соразмерный вердикт
+                    Бот сам подбирает соразмерное наказание по контексту
                   </span>
                 </button>
 
@@ -702,9 +702,9 @@
                       : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[11px] font-bold">🛡️ Пороги %</span>
+                  <span className="text-[11px] font-bold">📊 По шкале риска</span>
                   <span className="text-[9px] text-slate-400 leading-tight mt-1">
-                    Фиксированные числа (0-50% пропуск, 50-85% варн, 85%+ бан)
+                    Настраиваемые проценты для пропуска, варна и бана
                   </span>
                 </button>
 
@@ -717,9 +717,9 @@
                       : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[11px] font-bold text-amber-300">⚖️ Мягкий (Без бана)</span>
+                  <span className="text-[11px] font-bold text-amber-300">🛡️ Без авто-бана</span>
                   <span className="text-[9px] text-slate-400 leading-tight mt-1">
-                    Всегда только варн/удаление. Без авто-бана!
+                    Только варны и удаление. Без автоматических банов
                   </span>
                 </button>
 
@@ -732,9 +732,9 @@
                       : 'bg-[#07090e] border-[#1a2233] text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-[11px] font-bold text-indigo-300">🎯 Строгий 95%+</span>
+                  <span className="text-[11px] font-bold text-indigo-300">🎯 Макс. строгость</span>
                   <span className="text-[9px] text-slate-400 leading-tight mt-1">
-                    Бан только при 95%+ доказанном спаме/криминале
+                    Бан только при 100% подтвержденном спаме
                   </span>
                 </button>
               </div>
@@ -744,30 +744,30 @@
             <div className="space-y-3 pt-2 border-t border-[#1a2233]">
               <div className="flex justify-between items-center">
                 <p className="text-[11px] font-bold text-slate-200 uppercase tracking-wider">
-                  Настройка наказаний по категориям:
+                  Реакция на нарушения:
                 </p>
-                <span className="text-[10px] text-rose-400 font-mono-code">Кастомные правила</span>
+                <span className="text-[10px] text-rose-400 font-mono-code">Индивидуально</span>
               </div>
 
               {/* 1. Toxic Insult Rule */}
               <div className="p-3 bg-[#07090e] rounded-xl border border-[#1a2233] space-y-2">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-xs font-bold text-slate-200">Оскорбления и токсичность</p>
-                    <p className="text-[10px] text-slate-400">Мат, травля, агрессия в адрес участников</p>
+                    <p className="text-xs font-bold text-slate-200">Оскорбления и агрессия</p>
+                    <p className="text-[10px] text-slate-400">Прямые оскорбления участников, мат и травля</p>
                   </div>
                   <span className="font-mono-code text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                    {(settings.category_actions || {}).toxic_insult === 'ignore' ? 'НЕ УДАЛЯТЬ' : (settings.category_actions || {}).toxic_insult === 'delete' ? 'ТОЛЬКО УДАЛИТЬ' : (settings.category_actions || {}).toxic_insult === 'mute' ? 'МУТ' : (settings.category_actions || {}).toxic_insult === 'ban' ? 'БАН' : (settings.category_actions || {}).toxic_insult === 'warn' ? 'ВАРН' : 'ИИ РЕШАЕТ'}
+                    {(settings.category_actions || {}).toxic_insult === 'ignore' ? 'НЕ ТРОГАТЬ' : (settings.category_actions || {}).toxic_insult === 'delete' ? 'УДАЛИТЬ' : (settings.category_actions || {}).toxic_insult === 'mute' ? 'МУТ' : (settings.category_actions || {}).toxic_insult === 'ban' ? 'БАН' : (settings.category_actions || {}).toxic_insult === 'warn' ? 'ВАРН' : 'АВТО'}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
                   {[
-                    { id: 'ai_default', label: '🤖 ИИ решает' },
-                    { id: 'ignore', label: '👁️ Не удалять' },
-                    { id: 'delete', label: '🗑️ Удалить' },
-                    { id: 'warn', label: '⚠️ Варн' },
-                    { id: 'mute', label: '🔇 Мут' },
-                    { id: 'ban', label: '⛔ Бан' },
+                    { id: 'ai_default', label: '⚡ Авто' },
+                    { id: 'ignore', label: 'Не трогать' },
+                    { id: 'delete', label: 'Удалить' },
+                    { id: 'warn', label: 'Варн' },
+                    { id: 'mute', label: 'Мут' },
+                    { id: 'ban', label: 'Бан' },
                   ].map(act => (
                     <button
                       key={act.id}
@@ -797,17 +797,17 @@
                     <p className="text-[10px] text-slate-400">Ссылки на каналы, ботов, несанкционированный пиар</p>
                   </div>
                   <span className="font-mono-code text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                    {(settings.category_actions || {}).commercial_ad === 'ignore' ? 'НЕ УДАЛЯТЬ' : (settings.category_actions || {}).commercial_ad === 'delete' ? 'ТОЛЬКО УДАЛИТЬ' : (settings.category_actions || {}).commercial_ad === 'mute' ? 'МУТ' : (settings.category_actions || {}).commercial_ad === 'ban' ? 'БАН' : (settings.category_actions || {}).commercial_ad === 'warn' ? 'ВАРН' : 'ИИ РЕШАЕТ'}
+                    {(settings.category_actions || {}).commercial_ad === 'ignore' ? 'НЕ ТРОГАТЬ' : (settings.category_actions || {}).commercial_ad === 'delete' ? 'УДАЛИТЬ' : (settings.category_actions || {}).commercial_ad === 'mute' ? 'МУТ' : (settings.category_actions || {}).commercial_ad === 'ban' ? 'БАН' : (settings.category_actions || {}).commercial_ad === 'warn' ? 'ВАРН' : 'АВТО'}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
                   {[
-                    { id: 'ai_default', label: '🤖 ИИ решает' },
-                    { id: 'ignore', label: '👁️ Не удалять' },
-                    { id: 'delete', label: '🗑️ Удалить' },
-                    { id: 'warn', label: '⚠️ Варн' },
-                    { id: 'mute', label: '🔇 Мут' },
-                    { id: 'ban', label: '⛔ Бан' },
+                    { id: 'ai_default', label: '⚡ Авто' },
+                    { id: 'ignore', label: 'Не трогать' },
+                    { id: 'delete', label: 'Удалить' },
+                    { id: 'warn', label: 'Варн' },
+                    { id: 'mute', label: 'Мут' },
+                    { id: 'ban', label: 'Бан' },
                   ].map(act => (
                     <button
                       key={act.id}
@@ -833,8 +833,8 @@
               <div className="p-3 bg-[#07090e] rounded-xl border border-[#1a2233] space-y-2">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-xs font-bold text-slate-200">Крипто-скам и фишинг</p>
-                    <p className="text-[10px] text-slate-400">Раздачи TON/USDT, фейк-боты, вредоносные ссылки</p>
+                    <p className="text-xs font-bold text-slate-200">Мошенничество и скам</p>
+                    <p className="text-[10px] text-slate-400">Фейковые раздачи, спам-боты, вредоносные ссылки</p>
                   </div>
                   <span className="font-mono-code text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
                     {(settings.category_actions || {}).crypto_scam === 'warn' ? 'ВАРН' : (settings.category_actions || {}).crypto_scam === 'mute' ? 'МУТ' : 'БАН'}
@@ -842,9 +842,9 @@
                 </div>
                 <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold">
                   {[
-                    { id: 'ban', label: '⛔ Бан' },
-                    { id: 'mute', label: '🔇 Мут' },
-                    { id: 'warn', label: '⚠️ Варн' },
+                    { id: 'ban', label: 'Бан' },
+                    { id: 'mute', label: 'Мут' },
+                    { id: 'warn', label: 'Варн' },
                   ].map(act => (
                     <button
                       key={act.id}
@@ -905,8 +905,8 @@
             <div className="divide-y divide-[#1a2233] pt-1">
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">ИИ-фильтрация сообщений</p>
-                  <p className="text-[11px] text-slate-400">Семантический разбор DeepSeek / Llama 3.1</p>
+                  <p className="text-xs font-semibold text-slate-200">Автоматическая фильтрация</p>
+                  <p className="text-[11px] text-slate-400">Анализ текста сообщений на спам и угрозы</p>
                 </div>
                 <label className="ios-switch">
                   <input
@@ -941,10 +941,10 @@
               <div className="flex items-center justify-between py-3">
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-semibold text-rose-300">Тотальное сканирование всех СМС</p>
-                    <span className="text-[9px] font-mono-code text-rose-400 bg-rose-500/10 px-1 rounded border border-rose-500/20">Не рекомендуется</span>
+                    <p className="text-xs font-semibold text-rose-300">Проверка каждого сообщения</p>
+                    <span className="text-[9px] font-mono-code text-rose-400 bg-rose-500/10 px-1 rounded border border-rose-500/20">Все подряд</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">Анализ 100% сообщений через ИИ в обход пре-фильтров</p>
+                  <p className="text-[11px] text-slate-400">Сканировать 100% входящих сообщений подряд</p>
                 </div>
                 <label className="ios-switch">
                   <input
@@ -978,13 +978,13 @@
 
           {/* Section 2: Gatekeeper & Access */}
           <div className="glass-card p-4 space-y-3">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Контроль входа и Защита</h3>
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Контроль участников</h3>
             
             <div className="divide-y divide-[#1a2233]">
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">Капча при вступлении</p>
-                  <p className="text-[11px] text-slate-400">Защита от массовых юзерботов</p>
+                  <p className="text-xs font-semibold text-slate-200">Проверка при входе (Капча)</p>
+                  <p className="text-[11px] text-slate-400">Защита от наплыва спам-ботов</p>
                 </div>
                 <label className="ios-switch">
                   <input
@@ -1002,7 +1002,7 @@
                   <SegmentedControl
                     options={[
                       { value: 'button', label: 'Кнопка' },
-                      { value: 'ai_profiling', label: 'ИИ-Профиль' },
+                      { value: 'ai_profiling', label: 'Умная' },
                     ]}
                     value={settings.captcha_type || 'button'}
                     onChange={(v) => updateField('captcha_type', v)}
@@ -1012,7 +1012,7 @@
 
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">Анти-Рейд Паник-Мод</p>
+                  <p className="text-xs font-semibold text-slate-200">Анти-рейд защита</p>
                   <p className="text-[11px] text-slate-400">Локдаун при наплыве &gt;8 входов/15с</p>
                 </div>
                 <label className="ios-switch">
@@ -1027,8 +1027,8 @@
 
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">Карантин медиа новичкам</p>
-                  <p className="text-[11px] text-slate-400">Запрет медиа в первые часы</p>
+                  <p className="text-xs font-semibold text-slate-200">Ограничение для новичков</p>
+                  <p className="text-[11px] text-slate-400">Запрет медиафайлов в первые часы после входа</p>
                 </div>
                 <StepperControl
                   value={settings.newbie_media_lock_hours || 0}
@@ -1043,12 +1043,12 @@
 
           {/* Section 3: Content Filters */}
           <div className="glass-card p-4 space-y-3">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Фильтры контента</h3>
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Правила контента</h3>
             
             <div className="divide-y divide-[#1a2233]">
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">Защита от каналов (sender_chat)</p>
+                  <p className="text-xs font-semibold text-slate-200">Сообщения от каналов</p>
                   <p className="text-[11px] text-slate-400">Блокировать сообщения от имени каналов</p>
                 </div>
                 <label className="ios-switch">
@@ -1063,8 +1063,8 @@
 
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">Инлайн-боты (@bot)</p>
-                  <p className="text-[11px] text-slate-400">Разрешить отправку через инлайн-ботов</p>
+                  <p className="text-xs font-semibold text-slate-200">Инлайн-боты</p>
+                  <p className="text-[11px] text-slate-400">Разрешить отправку через внешних ботов</p>
                 </div>
                 <label className="ios-switch">
                   <input
@@ -1078,7 +1078,7 @@
 
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">Очистка системных сообщений</p>
+                  <p className="text-xs font-semibold text-slate-200">Служебные сообщения</p>
                   <p className="text-[11px] text-slate-400">Удалять «вступил», «закрепил», «покинул»</p>
                 </div>
                 <label className="ios-switch">
@@ -1096,16 +1096,16 @@
           {/* Section 4: Local Media Filters (0 Tokens) */}
           <div className="glass-card p-4 space-y-3">
             <div className="flex justify-between items-center">
-              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Медиа-Анализ</h3>
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Медиа-фильтры</h3>
               <span className="text-[10px] font-mono-code text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                0 токенов • CPU
+                Локально
               </span>
             </div>
 
             <div className="divide-y divide-[#1a2233]">
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">NSFW Фильтр (NudeNet v3)</p>
+                  <p className="text-xs font-semibold text-slate-200">Фильтр 18+ контента</p>
                   <p className="text-[11px] text-slate-400">Фото, видео, кружочки и стикеры</p>
                 </div>
                 <label className="ios-switch">
@@ -1120,8 +1120,8 @@
 
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">OCR Распознавание текста</p>
-                  <p className="text-[11px] text-slate-400">Чтение спам-текста прямо с картинок</p>
+                  <p className="text-xs font-semibold text-slate-200">Текст на изображениях</p>
+                  <p className="text-[11px] text-slate-400">Распознавание спам-текста и ссылок со скриншотов</p>
                 </div>
                 <label className="ios-switch">
                   <input
@@ -1135,8 +1135,8 @@
 
               <div className="flex items-center justify-between py-3">
                 <div>
-                  <p className="text-xs font-semibold text-slate-200">QR-Код Сканер</p>
-                  <p className="text-[11px] text-slate-400">Детекция фишинговых ссылок в QR</p>
+                  <p className="text-xs font-semibold text-slate-200">Сканер QR-кодов</p>
+                  <p className="text-[11px] text-slate-400">Проверка ссылок внутри QR-изображений</p>
                 </div>
                 <label className="ios-switch">
                   <input
