@@ -36,7 +36,9 @@ class Chat(Base, TimestampMixin):
     # 3. AI & Moderation Engine
     ai_moderation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     moderation_mode: Mapped[str] = mapped_column(String(32), default="ai_judge")          # 'ai_judge', 'standard', 'review_only', 'strict_confidence'
+    report_mode: Mapped[str] = mapped_column(String(32), default="admin_only")              # 'admin_only' (to admin review) vs 'ai_instant' (instant AI verdict)
     send_suspicious_to_admin: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # send borderline to admin
+
     ai_confidence_threshold: Mapped[float] = mapped_column(Float, default=85.0)             # >85% auto-punish
     ai_review_threshold: Mapped[float] = mapped_column(Float, default=50.0)                 # 50-85% review/warn
     ai_sampling_rate: Mapped[float] = mapped_column(Float, default=0.05)                    # 5% random sampling

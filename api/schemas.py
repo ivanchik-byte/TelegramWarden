@@ -30,6 +30,7 @@ class ChatSettingsResponseSchema(BaseModel):
     newbie_media_lock_hours: int
     ai_moderation_enabled: bool
     moderation_mode: str
+    report_mode: str = "admin_only"
     send_suspicious_to_admin: bool
     category_actions: dict[str, str] = {}
     ai_confidence_threshold: float
@@ -67,7 +68,9 @@ class ChatSettingsUpdateSchema(BaseModel):
     newbie_media_lock_hours: Optional[int] = None
     ai_moderation_enabled: Optional[bool] = None
     moderation_mode: Optional[str] = None
+    report_mode: Optional[str] = None
     send_suspicious_to_admin: Optional[bool] = None
+
     category_actions: Optional[dict[str, str]] = None
     ai_confidence_threshold: Optional[float] = Field(None, ge=50.0, le=99.0)
     ai_review_threshold: Optional[float] = Field(None, ge=20.0, le=85.0)

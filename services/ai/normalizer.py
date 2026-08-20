@@ -30,11 +30,21 @@ HOMOGLYPH_MAP = {
     "ι": "i", "Ι": "I",
     "κ": "k", "Κ": "K",
     "ο": "o", "Ο": "O",
-    "ρ": "p", "Ρ": "P",
+    "ρ": "p", "Р": "P",
     "τ": "t", "Τ": "T",
     "υ": "u", "Υ": "Y",
     "χ": "x", "Χ": "X",
 }
+
+# Advanced Unicode confusables, small capital letters & IPA bypass characters
+CONFUSABLES_MAP = {
+    "ᴨ": "п", "ᴘ": "р", "ᴛ": "т", "ʏ": "у", "ʙ": "в", "ʜ": "н", "ʟ": "л", "ᴫ": "л",
+    "ᴋ": "к", "ᴍ": "м", "ᴏ": "о", "ѕ": "s", "ԁ": "д", "ω": "ш", "ɑ": "а", "ɒ": "о",
+    "ɛ": "е", "ɩ": "и", "ɣ": "г", "ʋ": "в", "ʍ": "м", "ɯ": "ш", "ɹ": "р", "ɾ": "р",
+    "ʉ": "у", "ʌ": "л", "ʎ": "у", "ʒ": "з", "ʙ": "в", "ɡ": "г", "ᴤ": "с", "ᴦ": "г",
+    "ᴧ": "л", "ᴪ": "пс", "ᴽ": "у", "ᵾ": "у", "ᵿ": "у",
+}
+
 
 # Regex for Zero-Width and invisible characters
 ZERO_WIDTH_PATTERN = re.compile(
@@ -77,8 +87,9 @@ class TextSanitizer:
         had_invisible = bool(ZERO_WIDTH_PATTERN.search(raw_text))
         clean_text = ZERO_WIDTH_PATTERN.sub("", raw_text)
 
-        # 2. Unicode normalization (NFKC decomposes combined glyphs)
-        normalized = unicodedata.normalize("NFKC", clean_text)
+        # 2. Unicode normalization and Confusables transliteration (NFKC decomposes combined glyphs)
+        nfkc_text = unicodedata.normalize("NFKC", clean_text)
+        normalized = "".join(CONFUSABLES_MAP.get(ch, ch) for ch in nfkc_text)
 
         # 3. Extract hidden URLs from Markdown and HTML formatting
         extracted_urls: list[str] = []
@@ -121,3 +132,4 @@ class TextSanitizer:
             extracted_usernames=extracted_usernames,
             had_invisible_characters=had_invisible,
         )
+

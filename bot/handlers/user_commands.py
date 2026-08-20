@@ -293,30 +293,92 @@ async def handle_in_chat_rules_command(message: Message) -> None:
 
 @router.message(Command("report"))
 async def handle_in_chat_report_command(message: Message, session: AsyncSession) -> None:
-    """Allow chat members to report messages to admins."""
+    """Allow chat members to report messages (routed to Admins or instant AI check per chat settings)."""
     if message.chat.id > 0 or not message.reply_to_message:
-        await message.reply("Ответьте командой <code>/report</code> на подозрительное сообщение, чтобы позвать админов.")
+        await message.reply("Ответьте командой <code>/report</code> на подозрительное сообщение, чтобы отправить жалобу.")
         return
 
     chat_id = message.chat.id
     target_msg = message.reply_to_message
     target_user = target_msg.from_user
+    if not target_user:
+        return
+
     reporter = message.from_user
-
     reporter_name = reporter.first_name if reporter else "Участник"
-    target_name = target_user.first_name if target_user else "Пользователь"
-    target_id = target_user.id if target_user else 0
-    snippet = (target_msg.text or target_msg.caption or "[Медиафайл]")[:200]
+    target_name = target_user.first_name or "Пользователь"
+    target_id = target_user.id
+    snippet = (target_msg.text or target_msg.caption or "[Медиафайл]")[:300]
 
-    # Check log channel
+    # Fetch Chat DB
     res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
     chat_db = res_c.scalar_one_or_none()
-    log_channel = chat_db.log_channel_id if chat_db else None
+    if not chat_db:
+        chat_db = Chat(chat_id=chat_id, title=message.chat.title or "Chat")
+        session.add(chat_db)
+        await session.flush()
+
+    report_mode = getattr(chat_db, 'report_mode', 'admin_only') or 'admin_only'
+
+    # MODE 1: Instant AI Verification
+    if report_mode == "ai_instant":
+        status_msg = await message.reply("🔍 Жалоба принята. Проверяю сообщение через нейросеть...")
+        raw_text = target_msg.text or target_msg.caption or ""
+        sanitized = TextSanitizer.sanitize(raw_text)
+
+        from services.ai.client import ai_dispatcher
+        verdict = await ai_dispatcher.analyze_message(
+            message_text=sanitized.clean_text,
+            user_info=f"Reported message from {target_user.id} in {chat_id}",
+        )
+
+        if verdict.is_violation:
+            # Delete reported message
+            try:
+                await target_msg.delete()
+            except Exception:
+                pass
+
+            # Sanction the offender (target_user)
+            user_db = await SanctionsExecutor.get_or_create_user(
+                session=session,
+                chat_id=chat_id,
+                telegram_id=target_user.id,
+                username=target_user.username,
+                first_name=target_user.first_name,
+            )
+
+            # Apply sanction
+            if verdict.suggested_action == "ban_user" or verdict.category.value in ["crypto_scam", "illegal_contraband"]:
+                await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
+                sanction_text = f"нарушитель <b>{target_name}</b> заблокирован"
+            else:
+                active_warns = await SanctionsExecutor.apply_warn(
+                    message.bot, session, chat_db, user_db, reason=verdict.reason, category=verdict.category.value
+                )
+                sanction_text = f"нарушителю <b>{target_name}</b> выдан варн ({active_warns}/{chat_db.warn_limit})"
+
+            await session.commit()
+            await status_msg.edit_text(
+                f"✅ <b>Спасибо за жалобу, {reporter_name}!</b>\n\n"
+                f"ИИ подтвердил нарушение (<code>{verdict.category.value}</code>, {verdict.confidence}%).\n"
+                f"Сообщение удалено, {sanction_text}."
+            )
+            return
+        else:
+            await status_msg.edit_text(
+                f"<b>Жалоба от {reporter_name} проверена.</b>\n\n"
+                "Признаков явного спама или нарушений не обнаружено. Информация сохранена для администраторов."
+            )
+            return
+
+    # MODE 2: Admin-Only Review (Dispatch verification card to Admins/Log Channel)
+    log_channel = chat_db.log_channel_id
 
     report_text = (
         "🚨 <b>Жалоба на сообщение от участника</b>\n\n"
         f"• <b>Чат:</b> {message.chat.title or chat_id}\n"
-        f"• <b>Автор жалобы:</b> {reporter_name}\n"
+        f"• <b>Автор жалобы:</b> {reporter_name} (ID: <code>{reporter.id if reporter else 0}</code>)\n"
         f"• <b>Нарушитель:</b> {target_name} (ID: <code>{target_id}</code>)\n"
         f"• <b>Текст СМС:</b> <i>«{snippet}»</i>"
     )
@@ -325,11 +387,15 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🗑️ Удалить сообщение",
+                    text="🗑️ Удалить",
                     callback_data=f"rep:del:{chat_id}:{target_msg.message_id}",
                 ),
                 InlineKeyboardButton(
-                    text="⛔ Забанить",
+                    text="⚠️ Варн",
+                    callback_data=f"rep:warn:{chat_id}:{target_id}",
+                ),
+                InlineKeyboardButton(
+                    text="⛔ Бан",
                     callback_data=f"rep:ban:{chat_id}:{target_id}",
                 ),
             ]
@@ -339,9 +405,10 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
     if log_channel:
         try:
             await message.bot.send_message(chat_id=log_channel, text=report_text, reply_markup=report_kb)
-            await message.reply("✅ Жалоба успешно отправлена администраторам на рассмотрение.")
+            await message.reply("✅ Жалоба успешно отправлена администраторам в журнал модерации.")
             return
         except Exception:
             pass
 
     await message.reply("✅ Жалоба принята. Администраторы уведомлены.", reply_markup=report_kb)
+
