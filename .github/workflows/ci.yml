@@ -56,9 +56,11 @@ jobs:
         env:
           BOT_TOKEN: "123456789:ABCDefghIJKlmnoPQRstuvWXYZ_1234567"
           BOT_USERNAME: "TelegramWardenBot"
+          SUPERADMIN_IDS: "8667615215,123456789"
           DATABASE_URL: "postgresql+asyncpg://warden_user:warden_secure_password@localhost:5432/warden_db"
           REDIS_URL: "redis://localhost:6379/0"
           DEEPSEEK_API_KEY: "test_key"
           SECRET_KEY: "test_secret_key_for_testing_purposes_only"
         run: |
           pytest tests/ -v
+
