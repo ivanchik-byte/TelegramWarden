@@ -50,20 +50,19 @@ async def handle_start_command(message: Message, session: AsyncSession) -> None:
     # 2. Private Chat: Verify administrative permissions
     accessible_chats = await get_user_administered_chats(message.bot, session, user_id)
 
-    # If user has no admin groups and is not a superadmin -> Show Restricted Access
+    # If user has no admin groups and is not a superadmin -> Show User Profile & Menu
     if not accessible_chats and not is_superadmin(user_id):
+        from bot.handlers.user_commands import get_user_home_keyboard
+        user_name = message.from_user.first_name if message.from_user else "Пользователь"
         text = (
-            "<b>Доступ ограничен</b>\n\n"
-            "Вы не являетесь администратором или доверенным лицом подключенных сообществ.\n\n"
-            f"Ваш Telegram ID: <code>{user_id}</code>\n\n"
-            "<b>Как получить доступ к управлению:</b>\n"
-            "1. Попросите владельца группы добавить ваш ID в белый список через команду <code>/admin add</code>.\n"
-            "2. Или добавьте бота в свою группу и назначьте Администратором.\n\n"
-            "TelegramWarden — интеллектуальная система защиты групп на базе ИИ."
+            f"👋 <b>Здравствуйте, {user_name}!</b>\n\n"
+            "<b>TelegramWarden</b> — это система интеллектуальной защиты и модерации чатов.\n\n"
+            "Здесь вы можете посмотреть свой личный профиль, статус предупреждений в группах и ознакомиться с правилами безопасности."
         )
-        keyboard = get_non_admin_keyboard(username)
+        keyboard = get_user_home_keyboard(username, is_admin=False, webapp_url="")
         await message.reply(text=text, reply_markup=keyboard)
         return
+
 
     # User is Admin or SuperAdmin -> Open Admin Command Center
     webapp_url = settings.WEBAPP_URL or ""

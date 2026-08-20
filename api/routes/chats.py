@@ -39,6 +39,7 @@ def _chat_to_response(chat_db: Chat) -> ChatSettingsResponseSchema:
         media_qr_filter_enabled=chat_db.media_qr_filter_enabled,
         media_ocr_filter_enabled=chat_db.media_ocr_filter_enabled,
         warn_limit=chat_db.warn_limit,
+        warn_expiration_days=getattr(chat_db, 'warn_expiration_days', 7) or 7,
         warn_punishment=chat_db.warn_punishment,
         warn_mute_duration_minutes=chat_db.warn_mute_duration_minutes,
         night_mode_enabled=chat_db.night_mode_enabled,
