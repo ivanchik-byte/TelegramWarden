@@ -1325,6 +1325,7 @@
       const [totalCount, setTotalCount] = useState(0);
       const [page, setPage] = useState(0);
       const [searchQuery, setSearchQuery] = useState('');
+      const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
       const [loadingTables, setLoadingTables] = useState(true);
       const [loadingRecords, setLoadingRecords] = useState(false);
       const [error, setError] = useState(null);
@@ -1364,31 +1365,102 @@
       useEffect(() => { loadRecords(); }, [loadRecords]);
 
       const currentTableInfo = tables.find((t) => t.id === selectedTable);
-      const totalPages = Math.ceil(totalCount / limit);
+      const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
-      const renderCellValue = (key, val, colInfo) => {
-        if (val === null || val === undefined) return <span className="text-slate-600 font-mono text-[10px]">NULL</span>;
+      const renderBadge = (key, val) => {
+        if (key === 'warn_punishment' || key === 'action_type') {
+          const v = String(val).toLowerCase();
+          if (v === 'ban' || v === 'ban_user') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30 shadow-sm shadow-rose-950/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> БАН
+              </span>
+            );
+          }
+          if (v === 'warn') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span> ВАРН
+              </span>
+            );
+          }
+          if (v === 'mute' || v === 'mute_user') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span> МУТ
+              </span>
+            );
+          }
+          if (v === 'kick') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span> КИК
+              </span>
+            );
+          }
+        }
+
         if (typeof val === 'boolean') {
           return (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-              val ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400'
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold font-mono ${
+              val
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                : 'bg-slate-800 text-slate-500 border border-slate-700/40'
             }`}>
-              {val ? 'TRUE' : 'FALSE'}
+              {val ? 'ВКЛ' : 'ВЫКЛ'}
             </span>
           );
         }
+
         if (typeof val === 'number') {
-          return <span className="font-mono-code text-slate-200 text-[11px]">{val}</span>;
+          if (key === 'trust_score') {
+            const pct = Math.round(val * 100);
+            return (
+              <div className="flex items-center gap-1.5">
+                <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div style={{ width: `${pct}%` }} className={`h-full ${pct > 70 ? 'bg-emerald-400' : pct > 40 ? 'bg-amber-400' : 'bg-rose-400'}`}></div>
+                </div>
+                <span className="font-mono-code text-[10px] font-bold text-slate-300">{pct}%</span>
+              </div>
+            );
+          }
+          if (key.includes('threshold') || key.includes('confidence')) {
+            return (
+              <span className="font-mono-code font-bold text-[11px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                {Math.round(val)}%
+              </span>
+            );
+          }
+          return <span className="font-mono-code text-slate-200 text-xs">{val}</span>;
         }
+
+        if (val === null || val === undefined) {
+          return <span className="text-slate-600 font-mono text-[10px] italic">null</span>;
+        }
+
         if (typeof val === 'object') {
-          return <span className="font-mono-code text-rose-400 text-[10px] bg-rose-500/10 px-1.5 py-0.5 rounded">{Array.isArray(val) ? `[${val.length}]` : '{...}'}</span>;
+          return (
+            <span className="font-mono-code text-indigo-300 text-[10px] bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+              {Array.isArray(val) ? `Массив (${val.length})` : 'Объект'}
+            </span>
+          );
         }
+
         const strVal = String(val);
         if (strVal.includes('T') && strVal.includes(':') && strVal.length >= 19) {
           const d = new Date(strVal);
-          return <span className="font-mono-code text-slate-400 text-[10px]">{d.toLocaleDateString()} {d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>;
+          return (
+            <span className="font-mono-code text-slate-400 text-[10px]">
+              {d.toLocaleDateString('ru-RU')} <span className="text-slate-500">{d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            </span>
+          );
         }
-        return <span className="text-slate-300 text-xs truncate max-w-[140px] inline-block">{strVal}</span>;
+
+        if (key === 'chat_id' || key === 'telegram_id' || key === 'admin_telegram_id') {
+          return <span className="font-mono-code text-slate-300 text-[11px] select-all">{strVal}</span>;
+        }
+
+        return <span className="text-slate-200 text-xs truncate max-w-[160px] inline-block font-medium">{strVal}</span>;
       };
 
       if (loadingTables) {
@@ -1419,26 +1491,54 @@
       return (
         <div className="p-4 space-y-3.5 pb-28 anim-fade">
           
-          {/* Header Visualizer Info */}
-          <div className="glass-card p-3.5 flex items-center justify-between border-l-4 border-l-rose-500">
-            <div>
-              <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                {Icons.database('#e11d48', 15)} PostgreSQL Data Explorer
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Интерактивная визуализация таблиц, связей и записей в реальном времени
-              </p>
+          {/* Header Banner */}
+          <div className="glass-card p-3.5 flex items-center justify-between border-l-4 border-l-rose-500 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                {Icons.database('#e11d48', 18)}
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  PostgreSQL Data Explorer
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  {totalCount} записей в таблице <strong className="text-rose-400 font-mono-code">{selectedTable}</strong>
+                </p>
+              </div>
             </div>
-            <button
-              onClick={() => { loadTables(); loadRecords(); window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light'); }}
-              className="p-2 rounded-xl bg-slate-800/80 text-slate-400 hover:text-white"
-            >
-              {Icons.refresh('currentColor', 14)}
-            </button>
+
+            <div className="flex items-center gap-1.5">
+              {/* View Toggle */}
+              <div className="flex bg-[#07090e] p-0.5 rounded-xl border border-[#1a2233]">
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                    viewMode === 'table' ? 'bg-[#e11d48] text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Таблица
+                </button>
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                    viewMode === 'cards' ? 'bg-[#e11d48] text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Карточки
+                </button>
+              </div>
+
+              <button
+                onClick={() => { loadTables(); loadRecords(); window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light'); }}
+                className="p-2 rounded-xl bg-[#07090e] border border-[#1a2233] text-slate-400 hover:text-white"
+              >
+                {Icons.refresh('currentColor', 14)}
+              </button>
+            </div>
           </div>
 
-          {/* Table Selector Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {/* Horizontal Scrollable Table Selector Cards */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
             {tables.map((tbl) => {
               const active = tbl.id === selectedTable;
               return (
@@ -1450,33 +1550,40 @@
                     setSearchQuery('');
                     window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
                   }}
-                  className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                  className={`shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border transition-all ${
                     active
-                      ? 'bg-[#e11d48] text-white border-rose-500 shadow-md shadow-rose-950/60'
-                      : 'bg-[#0d111a] text-slate-400 border-[#1a2233] hover:text-slate-200'
+                      ? 'bg-gradient-to-r from-rose-950/60 to-[#0d111a] border-rose-500 shadow-lg shadow-rose-950/40 scale-[1.02]'
+                      : 'bg-[#0d111a] text-slate-400 border-[#1a2233] hover:text-slate-200 hover:border-slate-700'
                   }`}
                 >
-                  <span>{tbl.title}</span>
-                  <span className={`px-1.5 py-0.2 rounded-md font-mono-code text-[10px] ${
-                    active ? 'bg-black/30 text-white' : 'bg-slate-800 text-slate-400'
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${
+                    active ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-400'
                   }`}>
-                    {tbl.total_rows}
-                  </span>
+                    {Icons.table('currentColor', 14)}
+                  </div>
+                  <div className="text-left">
+                    <p className={`text-xs font-bold leading-tight ${active ? 'text-white' : 'text-slate-300'}`}>
+                      {tbl.title}
+                    </p>
+                    <p className="text-[10px] font-mono-code text-slate-500">
+                      {tbl.total_rows} записей
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </div>
 
-          {/* Search & Filter Bar */}
+          {/* Search Bar */}
           <div className="relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
               placeholder={`Поиск в ${currentTableInfo?.title || 'таблице'}...`}
-              className="w-full bg-[#0d111a] border border-[#1a2233] rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+              className="w-full bg-[#0d111a] border border-[#1a2233] rounded-2xl pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
-            <div className="absolute left-3 top-2.5 text-slate-500">
+            <div className="absolute left-3 top-3 text-slate-500">
               {Icons.search('#64748b', 14)}
             </div>
             {searchQuery && (
@@ -1489,44 +1596,95 @@
             )}
           </div>
 
-          {/* Table Schema Description */}
-          {currentTableInfo && (
-            <div className="p-2.5 rounded-xl bg-[#0d111a]/70 border border-[#1a2233] text-[11px] text-slate-400 flex flex-wrap items-center gap-1.5">
-              <span className="font-bold text-slate-300">Схема:</span>
-              {currentTableInfo.columns.map((col) => (
-                <span
-                  key={col.key}
-                  className={`font-mono-code text-[10px] px-1.5 py-0.5 rounded border ${
-                    col.is_pk ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 font-bold' : 'bg-slate-800/80 text-slate-400 border-slate-700/50'
-                  }`}
+          {/* Data Records View */}
+          {loadingRecords ? (
+            <div className="p-4 space-y-2">
+              {[1, 2, 3, 4, 5].map(i => <div key={i} className="skeleton-box h-12" />)}
+            </div>
+          ) : records.length === 0 ? (
+            <div className="glass-card p-10 text-center flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-2">
+                {Icons.table('#64748b', 20)}
+              </div>
+              <p className="text-xs font-bold text-slate-300">Записей не найдено</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">В таблице {selectedTable} пока нет данных или поиск не дал результатов</p>
+            </div>
+          ) : viewMode === 'cards' ? (
+            /* Card Deck View */
+            <div className="space-y-3">
+              {records.map((row, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => setSelectedRow(row)}
+                  className="glass-card p-4 space-y-2.5 border border-[#1a2233] hover:border-rose-500/40 transition-all cursor-pointer relative overflow-hidden"
                 >
-                  {col.key}: <span className="opacity-60">{col.type}</span>
-                </span>
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono-code text-xs font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
+                        #{row.id || row.chat_id || idx + 1}
+                      </span>
+                      {row.title && (
+                        <span className="text-xs font-bold text-white truncate max-w-[180px]">
+                          {row.title}
+                        </span>
+                      )}
+                      {row.username && (
+                        <span className="text-xs text-slate-300 font-mono-code">
+                          @{row.username}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Prominent Sanction/Status Pill */}
+                    {row.warn_punishment && renderBadge('warn_punishment', row.warn_punishment)}
+                    {row.action_type && renderBadge('action_type', row.action_type)}
+                    {row.is_active !== undefined && renderBadge('is_active', row.is_active)}
+                  </div>
+
+                  {/* Card Attributes Grid */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                    {currentTableInfo?.columns
+                      .filter(c => !['id', 'chat_id', 'title', 'username'].includes(c.key))
+                      .slice(0, 6)
+                      .map(col => (
+                        <div key={col.key} className="bg-[#07090e]/60 p-2 rounded-xl border border-[#1a2233]/60 flex flex-col justify-between">
+                          <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                            {col.label}
+                          </span>
+                          <div className="mt-1">
+                            {renderBadge(col.key, row[col.key])}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-[#1a2233]">
+                    <span className="text-[10px] text-slate-400 font-mono-code">
+                      {row.created_at ? new Date(row.created_at).toLocaleString('ru-RU') : ''}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedRow(row); }}
+                      className="text-[10px] font-bold text-rose-400 hover:text-rose-300 uppercase tracking-wider flex items-center gap-1"
+                    >
+                      Подробнее JSON →
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
-          )}
-
-          {/* Records Table View */}
-          <div className="glass-card overflow-hidden border border-[#1a2233]">
-            {loadingRecords ? (
-              <div className="p-4 space-y-2">
-                {[1, 2, 3, 4, 5].map(i => <div key={i} className="skeleton-box h-10" />)}
-              </div>
-            ) : records.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-500">
-                Записей в таблице <span className="font-mono text-slate-400">{selectedTable}</span> не найдено.
-              </div>
-            ) : (
+          ) : (
+            /* Horizontal Scrollable Table View with Centered Sanction Badges */
+            <div className="glass-card overflow-hidden border border-[#1a2233] relative">
               <div className="overflow-x-auto no-scrollbar">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-[#07090e] border-b border-[#1a2233]">
                       {currentTableInfo?.columns.map((col) => (
-                        <th key={col.key} className="px-3 py-2.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider whitespace-nowrap">
+                        <th key={col.key} className="px-4 py-3 text-[10px] uppercase font-bold text-slate-400 tracking-wider whitespace-nowrap">
                           {col.label}
                         </th>
                       ))}
-                      <th className="px-3 py-2.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider text-right">
+                      <th className="px-4 py-3 text-[10px] uppercase font-bold text-slate-400 tracking-wider text-right whitespace-nowrap">
                         JSON
                       </th>
                     </tr>
@@ -1536,19 +1694,19 @@
                       <tr
                         key={rowIdx}
                         onClick={() => setSelectedRow(row)}
-                        className="hover:bg-slate-800/30 transition-colors cursor-pointer"
+                        className="hover:bg-rose-950/10 transition-colors cursor-pointer"
                       >
                         {currentTableInfo?.columns.map((col) => (
-                          <td key={col.key} className="px-3 py-2.5 whitespace-nowrap">
-                            {renderCellValue(col.key, row[col.key], col)}
+                          <td key={col.key} className="px-4 py-3 whitespace-nowrap">
+                            {renderBadge(col.key, row[col.key])}
                           </td>
                         ))}
-                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedRow(row); }}
-                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono-code text-[10px]"
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono-code text-[10px]"
                           >
-                            Просмотр
+                            JSON
                           </button>
                         </td>
                       </tr>
@@ -1556,8 +1714,8 @@
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
@@ -1565,19 +1723,19 @@
               <button
                 onClick={() => { setPage(p => Math.max(0, p - 1)); window.Telegram?.WebApp?.HapticFeedback?.selectionChanged(); }}
                 disabled={page <= 0}
-                className="px-3 py-1.5 rounded-xl bg-[#0d111a] border border-[#1a2233] text-slate-300 disabled:opacity-30 disabled:pointer-events-none font-semibold text-xs"
+                className="px-3.5 py-2 rounded-xl bg-[#0d111a] border border-[#1a2233] text-slate-300 disabled:opacity-30 disabled:pointer-events-none font-semibold text-xs transition-all active:scale-95"
               >
                 ← Назад
               </button>
 
               <span className="font-mono-code text-[11px] text-slate-400">
-                Стр. <strong className="text-slate-200">{page + 1}</strong> из {totalPages} ({totalCount} записей)
+                Стр. <strong className="text-white">{page + 1}</strong> из {totalPages} ({totalCount} записей)
               </span>
 
               <button
                 onClick={() => { setPage(p => Math.min(totalPages - 1, p + 1)); window.Telegram?.WebApp?.HapticFeedback?.selectionChanged(); }}
                 disabled={page >= totalPages - 1}
-                className="px-3 py-1.5 rounded-xl bg-[#0d111a] border border-[#1a2233] text-slate-300 disabled:opacity-30 disabled:pointer-events-none font-semibold text-xs"
+                className="px-3.5 py-2 rounded-xl bg-[#0d111a] border border-[#1a2233] text-slate-300 disabled:opacity-30 disabled:pointer-events-none font-semibold text-xs transition-all active:scale-95"
               >
                 Вперёд →
               </button>
@@ -1586,28 +1744,28 @@
 
           {/* JSON Row Inspector Modal */}
           {selectedRow && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 anim-fade">
-              <div className="glass-card max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden border border-rose-500/30 shadow-2xl">
-                <div className="p-3.5 bg-[#07090e] border-b border-[#1a2233] flex justify-between items-center">
-                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono-code flex items-center gap-1.5">
-                    {Icons.table('#e11d48', 14)} {selectedTable} // Запись
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 anim-fade">
+              <div className="glass-card max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden border border-rose-500/40 shadow-2xl">
+                <div className="p-4 bg-[#07090e] border-b border-[#1a2233] flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono-code flex items-center gap-2">
+                    {Icons.table('#e11d48', 16)} {selectedTable} // Запись
                   </h4>
                   <button
                     onClick={() => setSelectedRow(null)}
-                    className="w-7 h-7 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-xs"
+                    className="w-7 h-7 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-xs"
                   >
                     ✕
                   </button>
                 </div>
-                <div className="p-3.5 overflow-y-auto no-scrollbar font-mono-code text-[11px] text-slate-300 bg-[#0a0d14] space-y-2">
-                  <pre className="whitespace-pre-wrap break-all leading-relaxed text-emerald-400">
+                <div className="p-4 overflow-y-auto no-scrollbar font-mono-code text-[11px] text-slate-300 bg-[#080b11] space-y-2">
+                  <pre className="whitespace-pre-wrap break-all leading-relaxed text-emerald-400 selection:bg-rose-500/30">
                     {JSON.stringify(selectedRow, null, 2)}
                   </pre>
                 </div>
-                <div className="p-3 bg-[#07090e] border-t border-[#1a2233] flex justify-end">
+                <div className="p-3.5 bg-[#07090e] border-t border-[#1a2233] flex justify-end">
                   <button
                     onClick={() => setSelectedRow(null)}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl"
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl"
                   >
                     Закрыть
                   </button>
@@ -1619,6 +1777,7 @@
         </div>
       );
     }
+
 
     /* ------------------------------------------------------------------ */
     /*  MAIN APP CONTAINER                                                */
