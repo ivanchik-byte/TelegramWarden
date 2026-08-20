@@ -1248,34 +1248,9 @@
             </div>
           </div>
 
-          {/* Bottom In-Page Full Save Button */}
-          <button
-            onClick={executeSave}
-            disabled={saving || !hasChanges}
-            className={`w-full py-4 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-              hasChanges
-                ? 'bg-[#e11d48] hover:bg-[#be123c] text-white shadow-xl shadow-rose-950/80 active:scale-[0.98]'
-                : 'bg-[#0d111a] text-slate-600 border border-[#1a2233] cursor-not-allowed'
-            }`}
-          >
-            {saving ? 'Сохранение в базу...' : hasChanges ? '💾 Сохранить изменения' : 'Все настройки сохранены'}
-          </button>
-
-          {/* Floating Bottom Bar when changes are made */}
-          {hasChanges && (
-            <div className="fixed bottom-[68px] left-0 right-0 max-w-lg mx-auto px-4 z-40">
-              <button
-                onClick={executeSave}
-                disabled={saving}
-                className="w-full py-3 bg-[#e11d48] hover:bg-[#be123c] active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-2xl shadow-rose-900/90 border border-rose-400/30 flex items-center justify-center gap-2 transition-all"
-              >
-                {saving ? 'Сохранение...' : '⚡ Сохранить настройки'}
-              </button>
-            </div>
-          )}
-
           {/* Toast Notification */}
           {saveToast && (
+
             <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg z-50 flex items-center gap-2 anim-fade">
               {Icons.check('#ffffff', 14)} Настройки успешно сохранены в базе данных!
             </div>
