@@ -262,22 +262,28 @@
       getStats:    (chatId) => apiRequest(`/api/stats/${chatId}`),
       getLogs:     (chatId, limit = 50) => apiRequest(`/api/stats/${chatId}/logs?limit=${limit}`),
       scanText:    (text) => apiRequest('/api/scan', { method: 'POST', body: JSON.stringify({ text }) }),
+      getDbTables: () => apiRequest('/api/database/tables'),
+      getDbRecords:(table, limit = 25, offset = 0, search = '') =>
+        apiRequest(`/api/database/records?table=${table}&limit=${limit}&offset=${offset}${search ? '&search=' + encodeURIComponent(search) : ''}`),
     };
 
     /* ------------------------------------------------------------------ */
     /*  Pure SVG Micro-Icons                                               */
     /* ------------------------------------------------------------------ */
     const Icons = {
-      shield: (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-      chart:  (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
-      tune:   (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="7" r="3"/><line x1="12" y1="10" x2="12" y2="21"/><line x1="12" y1="1" x2="12" y2="4"/><circle cx="6" cy="14" r="3"/><line x1="6" y1="17" x2="6" y2="21"/><line x1="6" y1="1" x2="6" y2="11"/><circle cx="18" cy="17" r="3"/><line x1="18" y1="20" x2="18" y2="21"/><line x1="18" y1="1" x2="18" y2="14"/></svg>,
-      list:   (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
-      search: (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-      refresh:(c='currentColor', s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>,
-      check:  (c='currentColor', s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
-      alert:  (c='currentColor', s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
-      clock:  (c='currentColor', s=12) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+      shield:   (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+      chart:    (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+      tune:     (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="7" r="3"/><line x1="12" y1="10" x2="12" y2="21"/><line x1="12" y1="1" x2="12" y2="4"/><circle cx="6" cy="14" r="3"/><line x1="6" y1="17" x2="6" y2="21"/><line x1="6" y1="1" x2="6" y2="11"/><circle cx="18" cy="17" r="3"/><line x1="18" y1="20" x2="18" y2="21"/><line x1="18" y1="1" x2="18" y2="14"/></svg>,
+      list:     (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+      search:   (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+      database: (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
+      refresh:  (c='currentColor', s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>,
+      check:    (c='currentColor', s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+      alert:    (c='currentColor', s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+      clock:    (c='currentColor', s=12) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+      table:    (c='currentColor', s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="12" y1="3" x2="12" y2="21"/></svg>,
     };
+
 
     /* ------------------------------------------------------------------ */
     /*  Smooth Metric Counter Component                                   */
@@ -1262,6 +1268,311 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /*  TAB 5: DATABASE (Interactive PostgreSQL Schema & Data Visualizer)  */
+    /* ------------------------------------------------------------------ */
+    function TabDatabase() {
+      const [tables, setTables] = useState([]);
+      const [selectedTable, setSelectedTable] = useState('chats');
+      const [records, setRecords] = useState([]);
+      const [totalCount, setTotalCount] = useState(0);
+      const [page, setPage] = useState(0);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [loadingTables, setLoadingTables] = useState(true);
+      const [loadingRecords, setLoadingRecords] = useState(false);
+      const [error, setError] = useState(null);
+      const [selectedRow, setSelectedRow] = useState(null);
+      const limit = 20;
+
+      // Load tables list
+      const loadTables = useCallback(() => {
+        setLoadingTables(true);
+        setError(null);
+        Api.getDbTables()
+          .then((data) => {
+            setTables(data);
+            if (data.length > 0 && !data.some(t => t.id === selectedTable)) {
+              setSelectedTable(data[0].id);
+            }
+          })
+          .catch((err) => setError(err.message))
+          .finally(() => setLoadingTables(false));
+      }, [selectedTable]);
+
+      useEffect(() => { loadTables(); }, []);
+
+      // Load records for selected table
+      const loadRecords = useCallback(() => {
+        if (!selectedTable) return;
+        setLoadingRecords(true);
+        Api.getDbRecords(selectedTable, limit, page * limit, searchQuery)
+          .then((res) => {
+            setRecords(res.records || []);
+            setTotalCount(res.total || 0);
+          })
+          .catch((err) => setError(err.message))
+          .finally(() => setLoadingRecords(false));
+      }, [selectedTable, page, searchQuery]);
+
+      useEffect(() => { loadRecords(); }, [loadRecords]);
+
+      const currentTableInfo = tables.find((t) => t.id === selectedTable);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      const renderCellValue = (key, val, colInfo) => {
+        if (val === null || val === undefined) return <span className="text-slate-600 font-mono text-[10px]">NULL</span>;
+        if (typeof val === 'boolean') {
+          return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+              val ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400'
+            }`}>
+              {val ? 'TRUE' : 'FALSE'}
+            </span>
+          );
+        }
+        if (typeof val === 'number') {
+          return <span className="font-mono-code text-slate-200 text-[11px]">{val}</span>;
+        }
+        if (typeof val === 'object') {
+          return <span className="font-mono-code text-rose-400 text-[10px] bg-rose-500/10 px-1.5 py-0.5 rounded">{Array.isArray(val) ? `[${val.length}]` : '{...}'}</span>;
+        }
+        const strVal = String(val);
+        if (strVal.includes('T') && strVal.includes(':') && strVal.length >= 19) {
+          const d = new Date(strVal);
+          return <span className="font-mono-code text-slate-400 text-[10px]">{d.toLocaleDateString()} {d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>;
+        }
+        return <span className="text-slate-300 text-xs truncate max-w-[140px] inline-block">{strVal}</span>;
+      };
+
+      if (loadingTables) {
+        return (
+          <div className="p-4 space-y-3">
+            <div className="skeleton-box h-12" />
+            <div className="skeleton-box h-32" />
+            <div className="skeleton-box h-64" />
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div className="p-8 text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mb-3">
+              {Icons.alert('#e11d48', 22)}
+            </div>
+            <p className="text-sm font-bold text-slate-200 mb-1">Ошибка базы данных</p>
+            <p className="text-xs text-slate-400 mb-4">{error}</p>
+            <button onClick={loadTables} className="px-4 py-2 bg-slate-800 text-xs font-semibold rounded-xl text-slate-200">
+              Повторить
+            </button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="p-4 space-y-3.5 pb-28 anim-fade">
+          
+          {/* Header Visualizer Info */}
+          <div className="glass-card p-3.5 flex items-center justify-between border-l-4 border-l-rose-500">
+            <div>
+              <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                {Icons.database('#e11d48', 15)} PostgreSQL Data Explorer
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Интерактивная визуализация таблиц, связей и записей в реальном времени
+              </p>
+            </div>
+            <button
+              onClick={() => { loadTables(); loadRecords(); window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light'); }}
+              className="p-2 rounded-xl bg-slate-800/80 text-slate-400 hover:text-white"
+            >
+              {Icons.refresh('currentColor', 14)}
+            </button>
+          </div>
+
+          {/* Table Selector Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {tables.map((tbl) => {
+              const active = tbl.id === selectedTable;
+              return (
+                <button
+                  key={tbl.id}
+                  onClick={() => {
+                    setSelectedTable(tbl.id);
+                    setPage(0);
+                    setSearchQuery('');
+                    window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+                  }}
+                  className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                    active
+                      ? 'bg-[#e11d48] text-white border-rose-500 shadow-md shadow-rose-950/60'
+                      : 'bg-[#0d111a] text-slate-400 border-[#1a2233] hover:text-slate-200'
+                  }`}
+                >
+                  <span>{tbl.title}</span>
+                  <span className={`px-1.5 py-0.2 rounded-md font-mono-code text-[10px] ${
+                    active ? 'bg-black/30 text-white' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    {tbl.total_rows}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search & Filter Bar */}
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+              placeholder={`Поиск в ${currentTableInfo?.title || 'таблице'}...`}
+              className="w-full bg-[#0d111a] border border-[#1a2233] rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+            />
+            <div className="absolute left-3 top-2.5 text-slate-500">
+              {Icons.search('#64748b', 14)}
+            </div>
+            {searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(''); setPage(0); }}
+                className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 font-bold text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Table Schema Description */}
+          {currentTableInfo && (
+            <div className="p-2.5 rounded-xl bg-[#0d111a]/70 border border-[#1a2233] text-[11px] text-slate-400 flex flex-wrap items-center gap-1.5">
+              <span className="font-bold text-slate-300">Схема:</span>
+              {currentTableInfo.columns.map((col) => (
+                <span
+                  key={col.key}
+                  className={`font-mono-code text-[10px] px-1.5 py-0.5 rounded border ${
+                    col.is_pk ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 font-bold' : 'bg-slate-800/80 text-slate-400 border-slate-700/50'
+                  }`}
+                >
+                  {col.key}: <span className="opacity-60">{col.type}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Records Table View */}
+          <div className="glass-card overflow-hidden border border-[#1a2233]">
+            {loadingRecords ? (
+              <div className="p-4 space-y-2">
+                {[1, 2, 3, 4, 5].map(i => <div key={i} className="skeleton-box h-10" />)}
+              </div>
+            ) : records.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500">
+                Записей в таблице <span className="font-mono text-slate-400">{selectedTable}</span> не найдено.
+              </div>
+            ) : (
+              <div className="overflow-x-auto no-scrollbar">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#07090e] border-b border-[#1a2233]">
+                      {currentTableInfo?.columns.map((col) => (
+                        <th key={col.key} className="px-3 py-2.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider whitespace-nowrap">
+                          {col.label}
+                        </th>
+                      ))}
+                      <th className="px-3 py-2.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider text-right">
+                        JSON
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1a2233]">
+                    {records.map((row, rowIdx) => (
+                      <tr
+                        key={rowIdx}
+                        onClick={() => setSelectedRow(row)}
+                        className="hover:bg-slate-800/30 transition-colors cursor-pointer"
+                      >
+                        {currentTableInfo?.columns.map((col) => (
+                          <td key={col.key} className="px-3 py-2.5 whitespace-nowrap">
+                            {renderCellValue(col.key, row[col.key], col)}
+                          </td>
+                        ))}
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedRow(row); }}
+                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono-code text-[10px]"
+                          >
+                            Просмотр
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-1 pt-1 text-xs">
+              <button
+                onClick={() => { setPage(p => Math.max(0, p - 1)); window.Telegram?.WebApp?.HapticFeedback?.selectionChanged(); }}
+                disabled={page <= 0}
+                className="px-3 py-1.5 rounded-xl bg-[#0d111a] border border-[#1a2233] text-slate-300 disabled:opacity-30 disabled:pointer-events-none font-semibold text-xs"
+              >
+                ← Назад
+              </button>
+
+              <span className="font-mono-code text-[11px] text-slate-400">
+                Стр. <strong className="text-slate-200">{page + 1}</strong> из {totalPages} ({totalCount} записей)
+              </span>
+
+              <button
+                onClick={() => { setPage(p => Math.min(totalPages - 1, p + 1)); window.Telegram?.WebApp?.HapticFeedback?.selectionChanged(); }}
+                disabled={page >= totalPages - 1}
+                className="px-3 py-1.5 rounded-xl bg-[#0d111a] border border-[#1a2233] text-slate-300 disabled:opacity-30 disabled:pointer-events-none font-semibold text-xs"
+              >
+                Вперёд →
+              </button>
+            </div>
+          )}
+
+          {/* JSON Row Inspector Modal */}
+          {selectedRow && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 anim-fade">
+              <div className="glass-card max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden border border-rose-500/30 shadow-2xl">
+                <div className="p-3.5 bg-[#07090e] border-b border-[#1a2233] flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono-code flex items-center gap-1.5">
+                    {Icons.table('#e11d48', 14)} {selectedTable} // Запись
+                  </h4>
+                  <button
+                    onClick={() => setSelectedRow(null)}
+                    className="w-7 h-7 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="p-3.5 overflow-y-auto no-scrollbar font-mono-code text-[11px] text-slate-300 bg-[#0a0d14] space-y-2">
+                  <pre className="whitespace-pre-wrap break-all leading-relaxed text-emerald-400">
+                    {JSON.stringify(selectedRow, null, 2)}
+                  </pre>
+                </div>
+                <div className="p-3 bg-[#07090e] border-t border-[#1a2233] flex justify-end">
+                  <button
+                    onClick={() => setSelectedRow(null)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl"
+                  >
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
     /*  MAIN APP CONTAINER                                                */
     /* ------------------------------------------------------------------ */
     function App() {
@@ -1300,10 +1611,11 @@
       const currentChat = chats?.find((c) => c.chat_id === selectedChatId);
 
       const TABS = [
-        { id: 'overview', icon: Icons.chart, label: 'Обзор' },
-        { id: 'settings', icon: Icons.tune,  label: 'Фильтры' },
-        { id: 'logs',     icon: Icons.list,  label: 'Журнал' },
-        { id: 'scanner',  icon: Icons.search,label: 'Сканер' },
+        { id: 'overview', icon: Icons.chart,    label: 'Обзор' },
+        { id: 'settings', icon: Icons.tune,     label: 'Фильтры' },
+        { id: 'logs',     icon: Icons.list,     label: 'Журнал' },
+        { id: 'database', icon: Icons.database, label: 'База Данных' },
+        { id: 'scanner',  icon: Icons.search,   label: 'Сканер' },
       ];
 
       return (
@@ -1333,7 +1645,7 @@
             </div>
 
             {/* Chat Selection Horizontal Pills */}
-            {!loadingChats && chats && chats.length > 0 && (
+            {!loadingChats && chats && chats.length > 0 && activeTab !== 'database' && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
                 {chats.map((c) => {
                   const active = c.chat_id === selectedChatId;
@@ -1360,7 +1672,9 @@
 
           {/* Main View Area */}
           <main className="flex-1 overflow-y-auto no-scrollbar">
-            {loadingChats ? (
+            {activeTab === 'database' ? (
+              <TabDatabase />
+            ) : loadingChats ? (
               <div className="p-4 space-y-3">
                 <div className="skeleton-box h-10" />
                 <div className="grid grid-cols-2 gap-3">
@@ -1407,7 +1721,7 @@
                       setActiveTab(t.id);
                       window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
                     }}
-                    className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition-all ${
+                    className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all ${
                       active ? 'text-[#e11d48]' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >

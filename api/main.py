@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from api.routes.chats import router as chats_router
+from api.routes.database import router as database_router
 from api.routes.stats import router as stats_router
 from core.database import init_db, close_db
 from core.logger import logger
@@ -55,6 +56,7 @@ app.add_middleware(
 # Mount API Routers
 app.include_router(chats_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
+app.include_router(database_router, prefix="/api")
 
 
 @app.get("/health", tags=["Health"])
