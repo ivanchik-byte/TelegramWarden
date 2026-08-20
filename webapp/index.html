@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>TelegramWarden Security Dashboard</title>
+  
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  
+  <!-- React 18 + ReactDOM + Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              rose: '#e11d48',
+              rosedark: '#be123c',
+              rosebg: 'rgba(225, 29, 72, 0.1)',
+              emerald: '#10b981',
+              emeraldbg: 'rgba(16, 185, 129, 0.1)',
+              amber: '#f59e0b',
+              amberbg: 'rgba(245, 158, 11, 0.1)',
+              blue: '#3b82f6',
+              purple: '#a855f7',
+            },
+            dark: {
+              950: '#07090e',
+              900: '#0d111a',
+              850: '#121722',
+              800: '#181f2e',
+              700: '#232d42',
+              600: '#334155',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    :root {
+      --bg-primary: #07090e;
+      --bg-card: #0d111a;
+      --bg-elevated: #141a27;
+      --border-subtle: #1e2738;
+      --border-accent: rgba(225, 29, 72, 0.3);
+      --accent-rose: #e11d48;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--tg-theme-bg-color, var(--bg-primary));
+      color: var(--tg-theme-text-color, var(--text-main));
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow-x: hidden;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Custom iOS styled Switch */
+    .ios-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .ios-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .ios-slider {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #232d42;
+      transition: .25s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .ios-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background-color: #ffffff;
+      transition: .25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    input:checked + .ios-slider {
+      background-color: #e11d48;
+      border-color: rgba(225, 29, 72, 0.5);
+      box-shadow: 0 0 12px rgba(225, 29, 72, 0.35);
+    }
+
+    input:checked + .ios-slider:before {
+      transform: translateX(20px);
+    }
+
+    /* Range Slider */
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 4px;
+      background: #181f2e;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #e11d48;
+      border: 2px solid #07090e;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(225, 29, 72, 0.5);
+      transition: transform 0.1s ease;
+    }
+
+    input[type=range]::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+
+    /* Glass Panels */
+    .glass-card {
+      background: #0d111a;
+      border: 1px solid #1a2233;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+    }
+
+    .glass-header {
+      background: rgba(13, 17, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid #1a2233;
+    }
+
+    .glass-nav {
+      background: rgba(13, 17, 26, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-top: 1px solid #1a2233;
+    }
+
+    /* Scrollbar */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Animations */
+    @keyframes fadeInScale {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .anim-fade { animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4); }
+      50% { box-shadow: 0 0 16px 2px rgba(225, 29, 72, 0.2); }
+    }
+    .pulse-glow { animation: pulseGlow 3s infinite ease-in-out; }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-box {
+      background: linear-gradient(90deg, #101624 25%, #182238 50%, #101624 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#07090e] text-slate-100 flex flex-col justify-between">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+    /* ------------------------------------------------------------------ */
+    /*  Telegram API & Auth Client                                         */
+    /* ------------------------------------------------------------------ */
+    let _initDataStr = '';
+
+    function getTelegramWebApp() {
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+        tg.setHeaderColor?.('#07090e');
+        tg.setBackgroundColor?.('#07090e');
+        _initDataStr = tg.initData || '';
+      }
+      return tg;
+    }
+
+    async function apiRequest(endpoint, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': _initDataStr,
+        ...options.headers,
+      };
+      const res = await fetch(endpoint, { ...options, headers });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server Error (HTTP ${res.status})`);
+      }
+      return res.json();
+    }
+
+    const Api = {
+      getChats:    () => apiRequest('/api/chats'),
+      getSettings: (chatId) => apiRequest(`/api/chats/${chatId}`),
+      saveSettings:(chatId, data) => apiRequest(`/api/chats/${chatId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      getStats:    (chatId) => apiRequest(`/api/stats/${chatId}`),
+      getLogs:     (chatId, limit = 50) => apiRequest(`/api/stats/${chatId}/logs?limit=${limit}`),
+      scanText:    (text) => apiRequest('/api/scan', { method: 'POST', body: JSON.stringify({ text }) }),
+    };
+
+    /* ------------------------------------------------------------------ */
+    /*  Pure SVG Micro-Icons                                               */
+    /* ------------------------------------------------------------------ */
+    const Icons = {
+      shield: (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+      chart:  (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+      tune:   (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="7" r="3"/><line x1="12" y1="10" x2="12" y2="21"/><line x1="12" y1="1" x2="12" y2="4"/><circle cx="6" cy="14" r="3"/><line x1="6" y1="17" x2="6" y2="21"/><line x1="6" y1="1" x2="6" y2="11"/><circle cx="18" cy="17" r="3"/><line x1="18" y1="20" x2="18" y2="21"/><line x1="18" y1="1" x2="18" y2="14"/></svg>,
+      list:   (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+      search: (c='currentColor', s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+      refresh:(c='currentColor', s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>,
+      check:  (c='currentColor', s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+      alert:  (c='currentColor', s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+      clock:  (c='currentColor', s=12) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    };
+
+    /* ------------------------------------------------------------------ */
+    /*  Smooth Metric Counter Component                                   */
+    /* ------------------------------------------------------------------ */
+    function AnimatedCounter({ value, colorClass = "text-white" }) {
+      const [count, setCount] = useState(0);
+      useEffect(() => {
+        const target = Number(value) || 0;
+        if (target === 0) { setCount(0); return; }
+        const duration = 500;
+        const start = Date.now();
+        const frame = () => {
+          const progress = Math.min((Date.now() - start) / duration, 1);
+          const easeOut = 1 - Math.pow(1 - progress, 3);
+          setCount(Math.round(easeOut * target));
+          if (progress < 1) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }, [value]);
+
+      return <span className={`font-mono-code text-2xl font-bold tracking-tight ${colorClass}`}>{count}</span>;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Segmented Control Component                                        */
+    /* ------------------------------------------------------------------ */
+    function SegmentedControl({ options, value, onChange }) {
+      return (
+        <div className="inline-flex bg-[#07090e] p-1 rounded-xl border border-[#1e2738] gap-1">
+          {options.map((opt) => {
+            const active = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  active
+                    ? 'bg-[#e11d48] text-white shadow-md shadow-rose-950/50'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Stepper Control Component                                         */
+    /* ------------------------------------------------------------------ */
+    function StepperControl({ value, min = 0, max = 100, step = 1, suffix = '', onChange }) {
+      return (
+        <div className="flex items-center bg-[#07090e] border border-[#1e2738] rounded-xl overflow-hidden">
+          <button
+            onClick={() => {
+              if (value > min) {
+                onChange(Math.max(min, value - step));
+                window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+              }
+            }}
+            disabled={value <= min}
+            className="w-9 h-8 flex items-center justify-center text-slate-400 active:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-base font-bold"
+          >
+            -
+          </button>
+          <span className="font-mono-code px-2 text-xs font-bold text-slate-200 min-w-[36px] text-center">
+            {value}{suffix}
+          </span>
+          <button
+            onClick={() => {
+              if (value < max) {
+                onChange(Math.min(max, value + step));
+                window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+              }
+            }}
+            disabled={value >= max}
+            className="w-9 h-8 flex items-center justify-center text-slate-400 active:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-base font-bold"
+          >
+            +
+          </button>
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  TAB 1: OVERVIEW (Metrics & Breakdown)                             */
+    /* ------------------------------------------------------------------ */
+    function TabOverview({ chatId }) {
+      const [stats, setStats] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      const loadData = useCallback(() => {
+        setLoading(true);
+        setError(null);
+        Api.getStats(chatId)
+          .then(setStats)
+          .catch((e) => setError(e.message))
+          .finally(() => setLoading(false));
+      }, [chatId]);
+
+      useEffect(() => { loadData(); }, [loadData]);
+
+      if (loading) {
+        return (
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map(i => <div key={i} className="skeleton-box h-24" />)}
+            </div>
+            <div className="skeleton-box h-44" />
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div className="p-8 text-center flex flex-col items-center justify-center min-h-[300px]">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mb-3">
+              {Icons.alert('#e11d48', 22)}
+            </div>
+            <p className="text-sm font-bold text-slate-200 mb-1">Ошибка загрузки</p>
+            <p className="text-xs text-slate-400 mb-4">{error}</p>
+            <button onClick={loadData} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-200">
+              Повторить запрос
+            </button>
+          </div>
+        );
+      }
+
+      const total = stats?.total_violations || 0;
+      const categories = stats?.violations_by_category || [];
+      const accuracy = total > 0 ? ((1 - (stats?.false_positives_count || 0) / total) * 100).toFixed(1) : 100;
+
+      const CAT_NAMES = {
+        crypto_scam: 'Крипто-скам / Фишинг',
+        ad: 'Реклама и спам-ссылки',
+        nsfw: 'NSFW / Запрещенные медиа',
+        toxic: 'Оскорбления / Токсичность',
+        flood: 'Флуд / Рейд атаки',
+        cas: 'Глобальный CAS бан',
+      };
+
+      const CAT_COLORS = {
+        crypto_scam: 'bg-rose-500',
+        ad: 'bg-amber-500',
+        nsfw: 'bg-purple-500',
+        toxic: 'bg-blue-500',
+        flood: 'bg-orange-500',
+        cas: 'bg-red-600',
+      };
+
+      return (
+        <div className="p-4 space-y-4 anim-fade">
+          
+          {/* Bento Grid Metrics */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="glass-card p-4 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Угрозы</span>
+                <span className="w-2 h-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500"></span>
+              </div>
+              <div className="mt-2">
+                <AnimatedCounter value={total} colorClass="text-white" />
+                <p className="text-[10px] text-slate-500 mt-1">нейтрализовано</p>
+              </div>
+            </div>
+
+            <div className="glass-card p-4 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Баны</span>
+                <span className="w-2 h-2 rounded-full bg-rose-600"></span>
+              </div>
+              <div className="mt-2">
+                <AnimatedCounter value={stats?.total_bans || 0} colorClass="text-rose-400" />
+                <p className="text-[10px] text-slate-500 mt-1">перманентно</p>
+              </div>
+            </div>
+
+            <div className="glass-card p-4 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Варны</span>
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              </div>
+              <div className="mt-2">
+                <AnimatedCounter value={stats?.total_warns_issued || 0} colorClass="text-amber-400" />
+                <p className="text-[10px] text-slate-500 mt-1">предупреждений</p>
+              </div>
+            </div>
+
+            <div className="glass-card p-4 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Точность ИИ</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-500"></span>
+              </div>
+              <div className="mt-2">
+                <span className="font-mono-code text-2xl font-bold tracking-tight text-emerald-400">{accuracy}%</span>
+                <p className="text-[10px] text-slate-500 mt-1">{stats?.false_positives_count || 0} ложных</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Breakdown Section */}
+          <div className="glass-card p-4 space-y-3.5">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Структура нарушений</h3>
+              <span className="text-[10px] font-mono-code text-slate-500">24/7 Monitor</span>
+            </div>
+
+            {categories.length > 0 ? (
+              <div className="space-y-3">
+                {categories.map((cat, idx) => {
+                  const pct = total > 0 ? Math.round((cat.count / total) * 100) : 0;
+                  return (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-300 font-medium">{CAT_NAMES[cat.category] || cat.category}</span>
+                        <span className="font-mono-code text-slate-400 text-[11px]">{cat.count} ({pct}%)</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-[#181f2e] rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${CAT_COLORS[cat.category] || 'bg-rose-500'} rounded-full transition-all duration-700`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs text-slate-500">
+                В этой группе пока нет зарегистрированных нарушений.
+              </div>
+            )}
+          </div>
+
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  TAB 2: SETTINGS (Granular Configuration)                          */
+    /* ------------------------------------------------------------------ */
+    function TabSettings({ chatId }) {
+      const [settings, setSettings] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const [saving, setSaving] = useState(false);
+      const [saveToast, setSaveToast] = useState(false);
+      const dirtyRef = useRef({});
+
+      const loadSettings = useCallback(() => {
+        setLoading(true);
+        setError(null);
+        Api.getSettings(chatId)
+          .then((data) => {
+            setSettings(data);
+            dirtyRef.current = {};
+          })
+          .catch((e) => setError(e.message))
+          .finally(() => setLoading(false));
+      }, [chatId]);
+
+      useEffect(() => { loadSettings(); }, [loadSettings]);
+
+      const updateField = (key, value) => {
+        setSettings((prev) => {
+          const next = { ...prev, [key]: value };
+          dirtyRef.current[key] = value;
+          return next;
+        });
+      };
+
+      const hasChanges = Object.keys(dirtyRef.current).length > 0;
+
+      // Handle Telegram MainButton
+      useEffect(() => {
+        const tg = window.Telegram?.WebApp;
+        if (!tg?.MainButton) return;
+
+        if (hasChanges) {
+          tg.MainButton.setText('СОХРАНИТЬ ИЗМЕНЕНИЯ');
+          tg.MainButton.color = '#e11d48';
+          tg.MainButton.textColor = '#ffffff';
+          tg.MainButton.show();
+        } else {
+          tg.MainButton.hide();
+        }
+
+        const handleMainButtonClick = () => {
+          executeSave();
+        };
+
+        tg.MainButton.onClick(handleMainButtonClick);
+        return () => {
+          tg.MainButton.offClick(handleMainButtonClick);
+        };
+      }, [hasChanges, settings]);
+
+      const executeSave = async () => {
+        if (!hasChanges) return;
+        setSaving(true);
+        try {
+          const updated = await Api.saveSettings(chatId, dirtyRef.current);
+          setSettings(updated);
+          dirtyRef.current = {};
+          setSaveToast(true);
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+          window.Telegram?.WebApp?.MainButton?.hide();
+          setTimeout(() => setSaveToast(false), 2500);
+        } catch (err) {
+          alert('Ошибка при сохранении: ' + err.message);
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      if (loading) {
+        return (
+          <div className="p-4 space-y-3">
+            <div className="skeleton-box h-24" />
+            <div className="skeleton-box h-48" />
+            <div className="skeleton-box h-48" />
+          </div>
+        );
+      }
+
+      if (error || !settings) {
+        return (
+          <div className="p-8 text-center flex flex-col items-center justify-center">
+            <p className="text-xs text-rose-400 mb-3">{error || 'Настройки недоступны'}</p>
+            <button onClick={loadSettings} className="px-4 py-2 bg-slate-800 text-xs font-semibold rounded-xl">Повторить</button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="p-4 space-y-4 pb-32 anim-fade">
+          
+          {/* Top Quick Save Bar */}
+          <div className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+            hasChanges
+              ? 'bg-rose-950/20 border-rose-500/40 shadow-lg shadow-rose-950/30'
+              : 'bg-[#0d111a] border-[#1a2233]'
+          }`}>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-rose-500 animate-ping' : 'bg-emerald-400'}`}></span>
+                <p className="text-xs font-bold text-slate-200">
+                  {hasChanges ? 'Есть несохранённые изменения' : 'Настройки актуальны'}
+                </p>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                {hasChanges ? 'Нажмите Сохранить для применения' : 'Синхронизировано с базой данных'}
+              </p>
+            </div>
+            <button
+              onClick={executeSave}
+              disabled={saving || !hasChanges}
+              className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                hasChanges
+                  ? 'bg-[#e11d48] hover:bg-[#be123c] active:scale-95 text-white shadow-lg shadow-rose-950/80'
+                  : 'bg-slate-800/60 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              {saving ? 'Сохраняю...' : hasChanges ? 'Сохранить' : 'Готово'}
+            </button>
+          </div>
+
+          {/* Section 1: AI Engine */}
+          <div className="glass-card p-4 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">ИИ-Модерация (NVIDIA NIM)</h3>
+              <span className="font-mono-code text-xs font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
+                {Math.round(settings.ai_confidence_threshold)}%
+              </span>
+            </div>
+
+            {/* Slider */}
+            <div className="space-y-2 pt-1">
+              <input
+                type="range"
+                min="50"
+                max="98"
+                value={settings.ai_confidence_threshold}
+                onChange={(e) => updateField('ai_confidence_threshold', Number(e.target.value))}
+              />
+              <div className="flex justify-between font-mono-code text-[10px] text-slate-500">
+                <span>50% (Строгий)</span>
+                <span>85% (Баланс)</span>
+                <span>98% (Точный)</span>
+              </div>
+            </div>
+
+            <div className="divide-y divide-[#1a2233] pt-1">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">ИИ-фильтрация сообщений</p>
+                  <p className="text-[11px] text-slate-400">Семантический разбор DeepSeek / Llama 3.1</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.ai_moderation_enabled}
+                    onChange={(e) => updateField('ai_moderation_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">CAS Бан-лист</p>
+                  <p className="text-[11px] text-slate-400">Глобальная база известных спамеров</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.cas_check_enabled}
+                    onChange={(e) => updateField('cas_check_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Gatekeeper & Access */}
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Контроль входа и Защита</h3>
+            
+            <div className="divide-y divide-[#1a2233]">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Капча при вступлении</p>
+                  <p className="text-[11px] text-slate-400">Защита от массовых юзерботов</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.captcha_enabled}
+                    onChange={(e) => updateField('captcha_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              {settings.captcha_enabled && (
+                <div className="py-3 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Тип верификации:</span>
+                  <SegmentedControl
+                    options={[
+                      { value: 'button', label: 'Кнопка' },
+                      { value: 'ai_profiling', label: 'ИИ-Профиль' },
+                    ]}
+                    value={settings.captcha_type || 'button'}
+                    onChange={(v) => updateField('captcha_type', v)}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Анти-Рейд Паник-Мод</p>
+                  <p className="text-[11px] text-slate-400">Локдаун при наплыве &gt;8 входов/15с</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.anti_raid_enabled}
+                    onChange={(e) => updateField('anti_raid_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Карантин медиа новичкам</p>
+                  <p className="text-[11px] text-slate-400">Запрет медиа в первые часы</p>
+                </div>
+                <StepperControl
+                  value={settings.newbie_media_lock_hours || 0}
+                  min={0}
+                  max={72}
+                  suffix="ч"
+                  onChange={(v) => updateField('newbie_media_lock_hours', v)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Content Filters */}
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Фильтры контента</h3>
+            
+            <div className="divide-y divide-[#1a2233]">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Защита от каналов (sender_chat)</p>
+                  <p className="text-[11px] text-slate-400">Блокировать сообщения от имени каналов</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={!settings.allow_sender_chat}
+                    onChange={(e) => updateField('allow_sender_chat', !e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Инлайн-боты (@bot)</p>
+                  <p className="text-[11px] text-slate-400">Разрешить отправку через инлайн-ботов</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.allow_via_bot}
+                    onChange={(e) => updateField('allow_via_bot', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Очистка системных сообщений</p>
+                  <p className="text-[11px] text-slate-400">Удалять «вступил», «закрепил», «покинул»</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.clean_service_messages}
+                    onChange={(e) => updateField('clean_service_messages', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Local Media Filters (0 Tokens) */}
+          <div className="glass-card p-4 space-y-3">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Медиа-Анализ</h3>
+              <span className="text-[10px] font-mono-code text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                0 токенов • CPU
+              </span>
+            </div>
+
+            <div className="divide-y divide-[#1a2233]">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">NSFW Фильтр (NudeNet v3)</p>
+                  <p className="text-[11px] text-slate-400">Фото, видео, кружочки и стикеры</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.media_nsfw_filter_enabled ?? true}
+                    onChange={(e) => updateField('media_nsfw_filter_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">OCR Распознавание текста</p>
+                  <p className="text-[11px] text-slate-400">Чтение спам-текста прямо с картинок</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.media_ocr_filter_enabled ?? true}
+                    onChange={(e) => updateField('media_ocr_filter_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">QR-Код Сканер</p>
+                  <p className="text-[11px] text-slate-400">Детекция фишинговых ссылок в QR</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.media_qr_filter_enabled ?? true}
+                    onChange={(e) => updateField('media_qr_filter_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 5: Sanctions & Warnings */}
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Система наказаний</h3>
+            
+            <div className="divide-y divide-[#1a2233]">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Лимит предупреждений</p>
+                  <p className="text-[11px] text-slate-400">До автоматической санкции</p>
+                </div>
+                <StepperControl
+                  value={settings.warn_limit || 3}
+                  min={1}
+                  max={10}
+                  onChange={(v) => updateField('warn_limit', v)}
+                />
+              </div>
+
+              <div className="py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Наказание</p>
+                  <p className="text-[11px] text-slate-400">Действие при превышении</p>
+                </div>
+                <SegmentedControl
+                  options={[
+                    { value: 'mute', label: 'Мут' },
+                    { value: 'ban', label: 'Бан' },
+                    { value: 'kick', label: 'Кик' },
+                  ]}
+                  value={settings.warn_punishment || 'mute'}
+                  onChange={(v) => updateField('warn_punishment', v)}
+                />
+              </div>
+
+              {settings.warn_punishment === 'mute' && (
+                <div className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-200">Длительность мута</p>
+                    <p className="text-[11px] text-slate-400">В минутах</p>
+                  </div>
+                  <StepperControl
+                    value={settings.warn_mute_duration_minutes || 1440}
+                    min={10}
+                    max={10080}
+                    step={60}
+                    suffix="м"
+                    onChange={(v) => updateField('warn_mute_duration_minutes', v)}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 6: Night Mode */}
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Ночной режим (Тихий час)</h3>
+            
+            <div className="divide-y divide-[#1a2233]">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Включить тихий час</p>
+                  <p className="text-[11px] text-slate-400">Ограничение отправки ночью</p>
+                </div>
+                <label className="ios-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.night_mode_enabled}
+                    onChange={(e) => updateField('night_mode_enabled', e.target.checked)}
+                  />
+                  <span className="ios-slider"></span>
+                </label>
+              </div>
+
+              {settings.night_mode_enabled && (
+                <div className="py-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Начало</label>
+                    <input
+                      type="time"
+                      value={settings.night_mode_start || '23:00'}
+                      onChange={(e) => updateField('night_mode_start', e.target.value)}
+                      className="w-full bg-[#07090e] border border-[#1e2738] rounded-xl px-3 py-2 text-xs font-mono-code text-white outline-none focus:border-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Конец</label>
+                    <input
+                      type="time"
+                      value={settings.night_mode_end || '08:00'}
+                      onChange={(e) => updateField('night_mode_end', e.target.value)}
+                      className="w-full bg-[#07090e] border border-[#1e2738] rounded-xl px-3 py-2 text-xs font-mono-code text-white outline-none focus:border-rose-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom In-Page Full Save Button */}
+          <button
+            onClick={executeSave}
+            disabled={saving || !hasChanges}
+            className={`w-full py-4 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+              hasChanges
+                ? 'bg-[#e11d48] hover:bg-[#be123c] text-white shadow-xl shadow-rose-950/80 active:scale-[0.98]'
+                : 'bg-[#0d111a] text-slate-600 border border-[#1a2233] cursor-not-allowed'
+            }`}
+          >
+            {saving ? 'Сохранение в базу...' : hasChanges ? '💾 Сохранить изменения' : 'Все настройки сохранены'}
+          </button>
+
+          {/* Floating Bottom Bar when changes are made */}
+          {hasChanges && (
+            <div className="fixed bottom-[68px] left-0 right-0 max-w-lg mx-auto px-4 z-40">
+              <button
+                onClick={executeSave}
+                disabled={saving}
+                className="w-full py-3 bg-[#e11d48] hover:bg-[#be123c] active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-2xl shadow-rose-900/90 border border-rose-400/30 flex items-center justify-center gap-2 transition-all"
+              >
+                {saving ? 'Сохранение...' : '⚡ Сохранить настройки'}
+              </button>
+            </div>
+          )}
+
+          {/* Toast Notification */}
+          {saveToast && (
+            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg z-50 flex items-center gap-2 anim-fade">
+              {Icons.check('#ffffff', 14)} Настройки успешно сохранены в базе данных!
+            </div>
+          )}
+
+        </div>
+      );
+
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  TAB 3: LOGS (Incident History & Auditing)                         */
+    /* ------------------------------------------------------------------ */
+    function TabLogs({ chatId }) {
+      const [logs, setLogs] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      const loadLogs = useCallback(() => {
+        setLoading(true);
+        setError(null);
+        Api.getLogs(chatId, 50)
+          .then(setLogs)
+          .catch((e) => setError(e.message))
+          .finally(() => setLoading(false));
+      }, [chatId]);
+
+      useEffect(() => { loadLogs(); }, [loadLogs]);
+
+      function formatTimeAgo(dateStr) {
+        const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+        if (diff < 60) return `${diff}с назад`;
+        if (diff < 3600) return `${Math.floor(diff / 60)}м назад`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`;
+        return `${Math.floor(diff / 86400)}д назад`;
+      }
+
+      const ACTION_LABELS = {
+        delete: 'Удалено',
+        warn: 'Предупреждение',
+        mute: 'Замучен',
+        ban: 'Заблокирован',
+        kick: 'Исключен',
+        captcha_kick: 'Капча-Кик',
+        ban_user: 'Забанен',
+        mute_user: 'Замучен',
+      };
+
+      const CAT_BADGES = {
+        crypto_scam: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+        ad: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+        nsfw: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+        toxic: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+        flood: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+        cas: 'bg-red-500/10 text-red-400 border-red-500/20',
+      };
+
+      if (loading) {
+        return (
+          <div className="p-4 space-y-3">
+            {[1, 2, 3, 4].map(i => <div key={i} className="skeleton-box h-24" />)}
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div className="p-8 text-center flex flex-col items-center justify-center">
+            <p className="text-xs text-rose-400 mb-3">{error}</p>
+            <button onClick={loadLogs} className="px-4 py-2 bg-slate-800 text-xs font-semibold rounded-xl">Повторить</button>
+          </div>
+        );
+      }
+
+      if (!logs || logs.length === 0) {
+        return (
+          <div className="p-6 flex flex-col items-center justify-center min-h-[380px] text-center anim-fade">
+            <div className="w-16 h-16 rounded-3xl bg-[#0d111a] border border-[#1a2233] flex items-center justify-center text-rose-500 mb-4 shadow-xl shadow-rose-950/20">
+              {Icons.shield('#e11d48', 28)}
+            </div>
+            <h3 className="text-sm font-bold text-slate-200 mb-1">Журнал инцидентов чист</h3>
+            <p className="text-xs text-slate-400 max-w-[260px] leading-relaxed mb-4">
+              В этой группе нарушений ещё не зафиксировано. ИИ и локальные фильтры непрерывно ведут мониторинг.
+            </p>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono-code font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Защита 24/7 Активна
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="p-4 space-y-3 pb-24 anim-fade">
+          <div className="flex justify-between items-center px-1">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Последние события</span>
+            <button onClick={loadLogs} className="text-slate-500 hover:text-slate-300 p-1">
+              {Icons.refresh('#64748b', 14)}
+            </button>
+          </div>
+
+          {logs.map((log) => (
+            <div key={log.id} className="glass-card p-3.5 space-y-2 border-l-4 border-l-rose-500">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${CAT_BADGES[log.category] || 'bg-slate-800 text-slate-300'}`}>
+                    {log.category}
+                  </span>
+                  {log.user_id && (
+                    <span className="font-mono-code text-[11px] text-slate-400">
+                      ID: {log.user_id}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-500 flex items-center gap-1 font-mono-code">
+                  {Icons.clock('#64748b', 12)} {formatTimeAgo(log.created_at)}
+                </span>
+              </div>
+
+              {log.reason && (
+                <p className="text-xs text-slate-300 bg-[#07090e]/60 p-2.5 rounded-xl border border-[#1a2233] leading-relaxed">
+                  {log.reason}
+                </p>
+              )}
+
+              <div className="flex justify-between items-center text-[11px] pt-1">
+                <span className="font-bold text-rose-400">
+                  {ACTION_LABELS[log.action_type] || log.action_type}
+                </span>
+                {log.confidence != null && (
+                  <span className="font-mono-code text-slate-400">
+                    Уверенность: <strong className="text-slate-200">{log.confidence.toFixed(1)}%</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  TAB 4: SCANNER (Real-time AI Analysis)                            */
+    /* ------------------------------------------------------------------ */
+    function TabScanner() {
+      const [input, setInput] = useState('');
+      const [result, setResult] = useState(null);
+      const [scanning, setScanning] = useState(false);
+      const [error, setError] = useState(null);
+
+      const runScan = async () => {
+        if (!input.trim()) return;
+        setScanning(true);
+        setError(null);
+        setResult(null);
+        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+
+        try {
+          const res = await Api.scanText(input);
+          setResult(res);
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred(res.is_violation ? 'warning' : 'success');
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setScanning(false);
+        }
+      };
+
+      const setPreset = (text) => {
+        setInput(text);
+        window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+      };
+
+      return (
+        <div className="p-4 space-y-4 pb-24 anim-fade">
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Интерактивный ИИ-Сканер</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Вставьте любой подозрительный текст для мгновенной проверки нейросетью NVIDIA NIM Llama 3.1:
+            </p>
+
+            <textarea
+              rows="3"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Введите текст для проверки..."
+              className="w-full bg-[#07090e] border border-[#1a2233] rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-rose-500 resize-none transition-colors"
+            />
+
+            {/* Quick Test Chips */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <span className="text-[10px] text-slate-500 self-center mr-1">Примеры:</span>
+              <button
+                onClick={() => setPreset('Срочно раздаем 500 TON! Переходи в бота @free_airdrop...')}
+                className="text-[10px] font-medium bg-[#141a27] hover:bg-[#1a2233] text-slate-300 px-2.5 py-1 rounded-lg border border-[#1e2738]"
+              >
+                Крипто-скам
+              </button>
+              <button
+                onClick={() => setPreset('Всем привет, когда следующий созвон по проекту?')}
+                className="text-[10px] font-medium bg-[#141a27] hover:bg-[#1a2233] text-slate-300 px-2.5 py-1 rounded-lg border border-[#1e2738]"
+              >
+                Чистый текст
+              </button>
+            </div>
+
+            <button
+              onClick={runScan}
+              disabled={scanning || !input.trim()}
+              className="w-full mt-2 py-3 bg-[#e11d48] hover:bg-[#be123c] disabled:opacity-40 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all active:scale-[0.98]"
+            >
+              {scanning ? 'Анализ нейросетью...' : 'Проверить сообщение'}
+            </button>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-400">
+              {error}
+            </div>
+          )}
+
+          {result && (
+            <div className={`glass-card p-4 space-y-2 border-l-4 anim-fade ${
+              result.is_violation ? 'border-l-rose-500 bg-rose-950/10' : 'border-l-emerald-500 bg-emerald-950/10'
+            }`}>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  {result.is_violation ? Icons.alert('#e11d48', 16) : Icons.check('#10b981', 16)}
+                  <span className={`text-xs font-bold uppercase tracking-wider ${
+                    result.is_violation ? 'text-rose-400' : 'text-emerald-400'
+                  }`}>
+                    {result.is_violation ? 'Угроза обнаружена' : 'Сообщение чистое'}
+                  </span>
+                </div>
+                <span className="font-mono-code text-xs font-bold text-slate-200">
+                  {result.confidence?.toFixed(1)}%
+                </span>
+              </div>
+
+              <p className="text-xs font-semibold text-slate-200 pt-1">
+                Категория: {result.category}
+              </p>
+              
+              <p className="text-xs text-slate-300 leading-relaxed bg-[#07090e]/60 p-2.5 rounded-xl border border-[#1a2233]">
+                {result.reason}
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  MAIN APP CONTAINER                                                */
+    /* ------------------------------------------------------------------ */
+    function App() {
+      const [activeTab, setActiveTab] = useState('overview');
+      const [user, setUser] = useState(null);
+      const [chats, setChats] = useState(null);
+      const [selectedChatId, setSelectedChatId] = useState(null);
+      const [loadingChats, setLoadingChats] = useState(true);
+      const [chatError, setChatError] = useState(null);
+
+      useEffect(() => {
+        const tg = getTelegramWebApp();
+        if (tg?.initDataUnsafe?.user) {
+          setUser(tg.initDataUnsafe.user);
+        }
+
+        // Check for ?chat_id= in URL query params (from inline bot buttons)
+        const urlParams = new URLSearchParams(window.location.search);
+        const queryChatId = urlParams.get('chat_id');
+
+        Api.getChats()
+          .then((chatList) => {
+            setChats(chatList);
+            if (chatList.length > 0) {
+              if (queryChatId && chatList.some(c => String(c.chat_id) === queryChatId)) {
+                setSelectedChatId(Number(queryChatId));
+              } else {
+                setSelectedChatId(chatList[0].chat_id);
+              }
+            }
+          })
+          .catch((err) => setChatError(err.message))
+          .finally(() => setLoadingChats(false));
+      }, []);
+
+      const currentChat = chats?.find((c) => c.chat_id === selectedChatId);
+
+      const TABS = [
+        { id: 'overview', icon: Icons.chart, label: 'Обзор' },
+        { id: 'settings', icon: Icons.tune,  label: 'Фильтры' },
+        { id: 'logs',     icon: Icons.list,  label: 'Журнал' },
+        { id: 'scanner',  icon: Icons.search,label: 'Сканер' },
+      ];
+
+      return (
+        <div className="max-w-lg mx-auto min-h-screen flex flex-col bg-[#07090e] text-slate-100">
+          
+          {/* Header */}
+          <header className="glass-header sticky top-0 z-50 px-4 pt-3.5 pb-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 pulse-glow">
+                  {Icons.shield('#e11d48', 18)}
+                </div>
+                <div>
+                  <h1 className="text-sm font-bold tracking-tight text-white leading-tight">
+                    {user ? `${user.first_name}` : 'TelegramWarden'}
+                  </h1>
+                  <p className="text-[10px] font-mono-code text-slate-400 leading-tight">
+                    NVIDIA NIM • Llama 3.1
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="text-[10px] font-mono-code font-bold text-emerald-400 uppercase">ONLINE</span>
+              </div>
+            </div>
+
+            {/* Chat Selection Horizontal Pills */}
+            {!loadingChats && chats && chats.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                {chats.map((c) => {
+                  const active = c.chat_id === selectedChatId;
+                  return (
+                    <button
+                      key={c.chat_id}
+                      onClick={() => {
+                        setSelectedChatId(c.chat_id);
+                        window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+                      }}
+                      className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all ${
+                        active
+                          ? 'bg-[#e11d48] text-white border-rose-500 shadow-md shadow-rose-950/60'
+                          : 'bg-[#0d111a] text-slate-400 border-[#1a2233] hover:text-slate-200'
+                      }`}
+                    >
+                      {c.title}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </header>
+
+          {/* Main View Area */}
+          <main className="flex-1 overflow-y-auto no-scrollbar">
+            {loadingChats ? (
+              <div className="p-4 space-y-3">
+                <div className="skeleton-box h-10" />
+                <div className="grid grid-cols-2 gap-3">
+                  {[1, 2, 3, 4].map(i => <div key={i} className="skeleton-box h-24" />)}
+                </div>
+                <div className="skeleton-box h-44" />
+              </div>
+            ) : chatError ? (
+              <div className="p-8 text-center flex flex-col items-center justify-center">
+                <p className="text-xs text-rose-400 mb-3">{chatError}</p>
+                <button onClick={() => window.location.reload()} className="px-4 py-2 bg-slate-800 text-xs font-semibold rounded-xl">
+                  Обновить
+                </button>
+              </div>
+            ) : !chats || chats.length === 0 ? (
+              <div className="p-8 text-center flex flex-col items-center justify-center min-h-[380px]">
+                <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3">
+                  {Icons.shield('#64748b', 24)}
+                </div>
+                <h3 className="text-sm font-bold text-slate-200 mb-1">Нет доступных групп</h3>
+                <p className="text-xs text-slate-400 max-w-[280px] leading-relaxed">
+                  Добавьте бота в группу и назначьте администратором, или попросите владельца добавить ваш ID в белый список.
+                </p>
+              </div>
+            ) : selectedChatId ? (
+              <>
+                {activeTab === 'overview' && <TabOverview chatId={selectedChatId} />}
+                {activeTab === 'settings' && <TabSettings chatId={selectedChatId} />}
+                {activeTab === 'logs'     && <TabLogs chatId={selectedChatId} />}
+                {activeTab === 'scanner'  && <TabScanner />}
+              </>
+            ) : null}
+          </main>
+
+          {/* Bottom Floating Navigation Bar */}
+          <nav className="glass-nav fixed bottom-0 left-0 right-0 max-w-lg mx-auto z-50">
+            <div className="flex justify-around items-center h-14 px-2">
+              {TABS.map((t) => {
+                const active = activeTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setActiveTab(t.id);
+                      window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+                    }}
+                    className={`flex flex-col items-center gap-0.5 py-1 px-4 rounded-xl transition-all ${
+                      active ? 'text-[#e11d48]' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {t.icon(active ? '#e11d48' : '#94a3b8', 18)}
+                    <span className={`text-[10px] ${active ? 'font-bold' : 'font-medium'}`}>
+                      {t.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

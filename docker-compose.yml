@@ -1,0 +1,83 @@
+services:
+  # PostgreSQL 16 Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: warden_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-warden_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-warden_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-warden_db}
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-warden_user} -d ${POSTGRES_DB:-warden_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - warden_network
+
+  # Redis 7 Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: warden_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - warden_network
+
+  # TelegramWarden App (Bot + FastAPI + Background Cleaner)
+  warden_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: warden_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - DATABASE_URL=
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=
+    ports:
+      - "${API_PORT:-2009}:2009"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - models_cache:/app/models_cache
+    networks:
+      - warden_network
+
+volumes:
+  postgres_data:
+    name: warden_postgres_data
+  redis_data:
+    name: warden_redis_data
+  models_cache:
+    name: warden_models_cache
+
+networks:
+  warden_network:
+    name: warden_network
+    driver: bridge
