@@ -6,10 +6,15 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from core.database import Base
+from core.config import settings
 from models import Chat, User, Warn, AuditLog
+
+# Always ensure a test superadmin is configured for the entire test suite
+settings.SUPERADMIN_IDS = "8667615215,123456789"
 
 # In-memory SQLite for blazing fast isolated testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
 
 
 @pytest_asyncio.fixture(scope="function")
