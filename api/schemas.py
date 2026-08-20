@@ -30,7 +30,9 @@ class ChatSettingsResponseSchema(BaseModel):
     newbie_media_lock_hours: int
     ai_moderation_enabled: bool
     ai_confidence_threshold: float
+    ai_review_threshold: float
     ai_sampling_rate: float
+    full_scan_enabled: bool
     media_nsfw_filter_enabled: bool
     media_qr_filter_enabled: bool
     media_ocr_filter_enabled: bool
@@ -61,7 +63,9 @@ class ChatSettingsUpdateSchema(BaseModel):
     newbie_media_lock_hours: Optional[int] = None
     ai_moderation_enabled: Optional[bool] = None
     ai_confidence_threshold: Optional[float] = Field(None, ge=50.0, le=99.0)
+    ai_review_threshold: Optional[float] = Field(None, ge=20.0, le=85.0)
     ai_sampling_rate: Optional[float] = Field(None, ge=0.0, le=1.0)
+    full_scan_enabled: Optional[bool] = None
     media_nsfw_filter_enabled: Optional[bool] = None
     media_qr_filter_enabled: Optional[bool] = None
     media_ocr_filter_enabled: Optional[bool] = None

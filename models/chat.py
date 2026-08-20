@@ -36,7 +36,9 @@ class Chat(Base, TimestampMixin):
     # 3. AI & Moderation Engine
     ai_moderation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     ai_confidence_threshold: Mapped[float] = mapped_column(Float, default=85.0)             # >85% auto-punish
+    ai_review_threshold: Mapped[float] = mapped_column(Float, default=50.0)                 # 50-85% review/warn
     ai_sampling_rate: Mapped[float] = mapped_column(Float, default=0.05)                    # 5% random sampling
+    full_scan_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # 100% full scan
 
     # 4. Media & Vision Protection (0 tokens on CPU)
     media_nsfw_filter_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

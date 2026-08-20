@@ -14,6 +14,7 @@ class ViolationCategory(str, Enum):
     ADULT_NSFW = "adult_nsfw"
     TOXIC_INSULT = "toxic_insult"
     FLOOD_SPAM = "flood_spam"
+    ILLEGAL_CONTRABAND = "illegal_contraband"  # CSAM/CP, drugs, doxxing, carding, weapons
     OTHER_VIOLATION = "other_violation"
 
 

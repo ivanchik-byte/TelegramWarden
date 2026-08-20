@@ -81,15 +81,20 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     days_in_chat = (datetime.now(timezone.utc) - user_db.first_seen_at).days
     is_forward = bool(message.forward_origin)
 
-    risk_result = RiskScorer.evaluate(
-        sanitized=sanitized,
-        user_message_count=user_db.message_count,
-        user_days_in_chat=days_in_chat,
-        is_forward=is_forward,
-        sampling_rate=chat_db.ai_sampling_rate,
-    )
+    full_scan = getattr(chat_db, 'full_scan_enabled', False)
+    if full_scan:
+        should_call_ai = True
+    else:
+        risk_result = RiskScorer.evaluate(
+            sanitized=sanitized,
+            user_message_count=user_db.message_count,
+            user_days_in_chat=days_in_chat,
+            is_forward=is_forward,
+            sampling_rate=chat_db.ai_sampling_rate,
+        )
+        should_call_ai = risk_result.should_call_ai
 
-    if not risk_result.should_call_ai or not chat_db.ai_moderation_enabled:
+    if not should_call_ai or not chat_db.ai_moderation_enabled:
         return  # 0 tokens spent, message is clean
 
     # 7. Query AI Intent Engine
@@ -102,18 +107,40 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     if not verdict.is_violation:
         return
 
-    # 8. Apply Sanctions if Confidence threshold is met
-    if verdict.confidence >= chat_db.ai_confidence_threshold:
-        logger.info(f"AI violation flagged in chat {chat_id} by user {user_id}: {verdict.category} ({verdict.confidence}%)")
+    # 8. Tiered AI Action Enforcement
+    # Thresholds:
+    # - Confidence < ai_review_threshold (default <50%): Ignore (Clean/Borderline)
+    # - Confidence >= ai_review_threshold and < ai_confidence_threshold (50-85%): Review/Warning/Delete
+    # - Confidence >= ai_confidence_threshold (>=85%): Hard Sanction (Ban/Mute)
+    ban_threshold = chat_db.ai_confidence_threshold or 85.0
+    review_threshold = getattr(chat_db, 'ai_review_threshold', 50.0) or 50.0
 
-        # Delete offending message
-        await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
+    if verdict.confidence < review_threshold:
+        return  # Under 50%: Clean message, pass
 
-        # Enforce action
-        if verdict.suggested_action == SuggestedAction.BAN_USER or verdict.category in (ViolationCategory.CRYPTO_SCAM, ViolationCategory.PHISHING):
+    # Always instant ban severe contraband regardless of lower threshold
+    is_severe_contraband = (verdict.category == ViolationCategory.ILLEGAL_CONTRABAND)
+
+    logger.info(f"AI violation flagged in chat {chat_id} by user {user_id}: {verdict.category} ({verdict.confidence}%)")
+
+    # Delete offending message
+    await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
+
+    # Enforce action based on confidence tier
+    if verdict.confidence >= ban_threshold or is_severe_contraband:
+        # Tier 3 (85%+ or CSAM/Contraband): Ban / Hard Mute
+        if verdict.suggested_action == SuggestedAction.BAN_USER or verdict.category in (
+            ViolationCategory.CRYPTO_SCAM,
+            ViolationCategory.PHISHING,
+            ViolationCategory.ILLEGAL_CONTRABAND,
+        ):
             await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
+            action_title = "Удаление + БАН (85%+ Уверенность)"
+            action_type = "ban_user"
         elif verdict.suggested_action == SuggestedAction.MUTE_USER:
-            await SanctionsExecutor.mute_user(message.bot, session, chat_id, user_db, duration_minutes=60, reason=verdict.reason)
+            await SanctionsExecutor.mute_user(message.bot, session, chat_id, user_db, duration_minutes=chat_db.warn_mute_duration_minutes or 1440, reason=verdict.reason)
+            action_title = "Удаление + МУТ (85%+ Уверенность)"
+            action_type = "mute_user"
         else:
             await SanctionsExecutor.apply_warn(
                 bot=message.bot,
@@ -124,42 +151,53 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
                 category=verdict.category.value,
                 message_id=message.message_id,
             )
-
-        # Record in Audit Logs
-        audit_entry = AuditLog(
-            chat_id=chat_id,
-            user_id=user_db.id,
-            action_type=verdict.suggested_action.value,
-            category=verdict.category.value,
+            action_title = "Удаление + Варн"
+            action_type = "warn"
+    else:
+        # Tier 2 (50-85%): Warning / Message deletion on verification
+        await SanctionsExecutor.apply_warn(
+            bot=message.bot,
+            session=session,
+            chat_db=chat_db,
+            user_db=user_db,
             reason=verdict.reason,
-            confidence=verdict.confidence,
-            raw_message_snippet=sanitized.clean_text[:400],
+            category=verdict.category.value,
+            message_id=message.message_id,
         )
-        session.add(audit_entry)
-        await session.flush()
+        action_title = "Удаление + Предупреждение (50-85% На проверке)"
+        action_type = "warn"
 
-        # Send informative moderation card with appeal button to group
-        from bot.keyboards.admin_logs import get_group_moderation_keyboard
-        user_name = message.from_user.full_name if message.from_user else f"ID {user_id}"
-        action_title = "Удаление + Варн"
-        if verdict.suggested_action == SuggestedAction.BAN_USER or verdict.category in (ViolationCategory.CRYPTO_SCAM, ViolationCategory.PHISHING):
-            action_title = "Удаление + БАН"
-        elif verdict.suggested_action == SuggestedAction.MUTE_USER:
-            action_title = "Удаление + МУТ"
+    # Record in Audit Logs
+    audit_entry = AuditLog(
+        chat_id=chat_id,
+        user_id=user_db.id,
+        action_type=action_type,
+        category=verdict.category.value,
+        reason=verdict.reason,
+        confidence=verdict.confidence,
+        raw_message_snippet=sanitized.clean_text[:400],
+    )
+    session.add(audit_entry)
+    await session.flush()
 
-        notice_text = (
-            "<b>TelegramWarden | Модерация</b>\n\n"
-            f"• <b>Пользователь:</b> {user_name} (ID: <code>{user_id}</code>)\n"
-            f"• <b>Действие:</b> <code>{action_title}</code>\n"
-            f"• <b>Причина:</b> {verdict.category.value} ({verdict.confidence}%)\n"
-            f"• <b>Пояснение:</b> {verdict.reason}\n\n"
-            "<i>Если вы не согласны с решением — нажмите кнопку ниже для подачи апелляции:</i>"
+    # Send informative moderation card with appeal button to group
+    from bot.keyboards.admin_logs import get_group_moderation_keyboard
+    user_name = message.from_user.full_name if message.from_user else f"ID {user_id}"
+
+    notice_text = (
+        "<b>TelegramWarden | Модерация</b>\n\n"
+        f"• <b>Пользователь:</b> {user_name} (ID: <code>{user_id}</code>)\n"
+        f"• <b>Действие:</b> <code>{action_title}</code>\n"
+        f"• <b>Причина:</b> {verdict.category.value} ({verdict.confidence}%)\n"
+        f"• <b>Пояснение:</b> {verdict.reason}\n\n"
+        "<i>Если вы не согласны с решением — нажмите кнопку ниже для подачи апелляции:</i>"
+    )
+    try:
+        await message.bot.send_message(
+            chat_id=chat_id,
+            text=notice_text,
+            reply_markup=get_group_moderation_keyboard(chat_id, user_id, audit_entry.id),
         )
-        try:
-            await message.bot.send_message(
-                chat_id=chat_id,
-                text=notice_text,
-                reply_markup=get_group_moderation_keyboard(chat_id, user_id, audit_entry.id),
-            )
-        except Exception as err:
-            logger.warning(f"Failed to post group moderation notice: {err}")
+    except Exception as err:
+        logger.warning(f"Failed to post group moderation notice: {err}")
+
