@@ -50,10 +50,27 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Initialize database tables."""
+    """Initialize database tables and run automatic lightweight column migrations."""
     logger.info("Initializing database connection and tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Automatic schema column migrations for PostgreSQL
+        migrations = [
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS ai_review_threshold FLOAT DEFAULT 50.0",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS full_scan_enabled BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_nsfw_filter_enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_qr_filter_enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_ocr_filter_enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS night_mode_timezone VARCHAR(64) DEFAULT 'UTC'",
+        ]
+        for sql in migrations:
+            try:
+                from sqlalchemy import text
+                await conn.execute(text(sql))
+            except Exception as mig_err:
+                logger.warning(f"Column migration notice ({sql}): {mig_err}")
+
     logger.info("Database initialized successfully.")
 
 
