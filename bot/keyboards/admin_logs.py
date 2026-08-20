@@ -55,33 +55,44 @@ def get_admin_log_keyboard(
     log_id: int,
     is_ban_action: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Generate action buttons for admin audit log card."""
-    buttons = []
-
+    """Generate action buttons for admin audit log verification card."""
     if is_ban_action:
-        buttons.append([
-            InlineKeyboardButton(
-                text="Разбанить",
-                callback_data=f"log:unban:{chat_id}:{user_id}:{log_id}",
-            )
-        ])
-    else:
-        buttons.append([
-            InlineKeyboardButton(
-                text="Снять варн",
-                callback_data=f"log:unwarn:{chat_id}:{user_id}:{log_id}",
-            ),
-            InlineKeyboardButton(
-                text="Забанить навсегда",
-                callback_data=f"log:ban:{chat_id}:{user_id}:{log_id}",
-            ),
-        ])
-
-    buttons.append([
-        InlineKeyboardButton(
-            text="Ложное срабатывание",
-            callback_data=f"log:false_pos:{log_id}",
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Разбанить",
+                        callback_data=f"log:unban:{chat_id}:{user_id}:{log_id}",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Ложное срабатывание",
+                        callback_data=f"log:false_pos:{log_id}",
+                    ),
+                ],
+            ]
         )
-    ])
 
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Снять варн",
+                    callback_data=f"log:unwarn:{chat_id}:{user_id}:{log_id}",
+                ),
+                InlineKeyboardButton(
+                    text="Забанить навсегда",
+                    callback_data=f"log:ban:{chat_id}:{user_id}:{log_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Ложное срабатывание",
+                    callback_data=f"log:false_pos:{log_id}",
+                ),
+            ],
+        ]
+    )
+
+

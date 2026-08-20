@@ -232,7 +232,7 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     await session.flush()
 
     # Send informative moderation card with appeal button to group
-    from bot.keyboards.admin_logs import get_group_moderation_keyboard
+    from bot.keyboards.admin_logs import get_group_moderation_keyboard, get_admin_log_keyboard
     user_name = message.from_user.full_name if message.from_user else f"ID {user_id}"
 
     notice_text = (
@@ -251,4 +251,27 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
         )
     except Exception as err:
         logger.warning(f"Failed to post group moderation notice: {err}")
+
+    # Send admin review card if enabled (or to log channel)
+    if getattr(chat_db, 'send_suspicious_to_admin', True):
+        admin_card_text = (
+            "🔍 <b>Спорное сообщение на проверку администраторам</b>\n\n"
+            f"• <b>Чат:</b> {chat_db.title or chat_id}\n"
+            f"• <b>От:</b> {user_name} (ID: <code>{user_id}</code>)\n"
+            f"• <b>Текст СМС:</b> <i>«{sanitized.clean_text[:200]}»</i>\n"
+            f"• <b>Оценка ИИ:</b> {verdict.category.value} ({int(verdict.confidence)}%)\n"
+            f"• <b>Причина:</b> {verdict.reason}\n\n"
+            "<i>Выберите действие ниже:</i>"
+        )
+        target_dest = getattr(chat_db, 'log_channel_id', None)
+        if target_dest:
+            try:
+                await message.bot.send_message(
+                    chat_id=target_dest,
+                    text=admin_card_text,
+                    reply_markup=get_admin_log_keyboard(chat_id, user_id, audit_entry.id, is_ban_action=(action_type == "ban_user")),
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to send review card to log channel {target_dest}: {log_err}")
+
 

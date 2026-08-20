@@ -29,6 +29,7 @@ def _chat_to_response(chat_db: Chat) -> ChatSettingsResponseSchema:
         newbie_media_lock_hours=chat_db.newbie_media_lock_hours,
         ai_moderation_enabled=chat_db.ai_moderation_enabled,
         moderation_mode=getattr(chat_db, 'moderation_mode', 'ai_judge') or 'ai_judge',
+        send_suspicious_to_admin=getattr(chat_db, 'send_suspicious_to_admin', True),
         category_actions=getattr(chat_db, 'category_actions', {}) or {},
         ai_confidence_threshold=chat_db.ai_confidence_threshold,
         ai_review_threshold=getattr(chat_db, 'ai_review_threshold', 50.0),
