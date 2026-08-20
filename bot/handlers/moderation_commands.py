@@ -425,6 +425,38 @@ async def handle_report_delete_callback(callback: CallbackQuery, session: AsyncS
     await callback.answer("Сообщение удалено!")
 
 
+@router.callback_query(F.data.startswith("rep:warn:"))
+async def handle_report_warn_callback(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Warn user flagged by report."""
+    parts = callback.data.split(":")
+    if len(parts) != 4:
+        return
+    chat_id = int(parts[2])
+    target_id = int(parts[3])
+    admin_id = callback.from_user.id
+
+    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
+    chat_db = res_c.scalar_one_or_none()
+    if not await is_chat_admin(callback.bot, chat_id, admin_id, chat_db):
+        await callback.answer("Только администраторы могут совершать это действие.", show_alert=True)
+        return
+
+    user_db = await SanctionsExecutor.get_or_create_user(session, chat_id, target_id)
+    active_count = await SanctionsExecutor.apply_warn(
+        bot=callback.bot,
+        session=session,
+        chat_db=chat_db,
+        user_db=user_db,
+        reason="Варн по жалобе участников",
+        category="manual_admin_warn",
+    )
+    await session.commit()
+
+    admin_name = callback.from_user.first_name or f"Admin {admin_id}"
+    await callback.message.edit_text(f"⚠️ Пользователю {target_id} выдан варн ({active_count}/{chat_db.warn_limit}) администратором {admin_name}.")
+    await callback.answer("Варн выдан!")
+
+
 @router.callback_query(F.data.startswith("rep:ban:"))
 async def handle_report_ban_callback(callback: CallbackQuery, session: AsyncSession) -> None:
     """Ban user flagged by report."""
@@ -452,3 +484,4 @@ async def handle_report_ban_callback(callback: CallbackQuery, session: AsyncSess
     admin_name = callback.from_user.first_name or f"Admin {admin_id}"
     await callback.message.edit_text(f"⛔ Пользователь {target_id} забанен администратором {admin_name}.")
     await callback.answer("Пользователь забанен!")
+

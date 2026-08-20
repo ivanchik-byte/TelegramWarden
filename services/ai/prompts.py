@@ -98,7 +98,7 @@ Response:
   "suggested_action": "ban_user"
 }
 
-Example 5 (Crypto Scam Bot Promo -> 98% Threat Risk):
+Example 6 (Crypto Scam Bot Promo -> 98% Threat Risk):
 User message: "Ребята, нашел бота который раздает по 50 TON в день на пассиве! Пишите в ЛС"
 Response:
 {
@@ -108,7 +108,19 @@ Response:
   "reason": "Завуалированный крипто-скам и призыв перейти в личные сообщения",
   "suggested_action": "ban_user"
 }
+
+Example 7 (Obfuscated Channel Promo Spam -> 90% Threat Risk):
+User message: "Pодпuшucь на kанал Hello-Boss"
+Response:
+{
+  "is_violation": true,
+  "category": "commercial_ad",
+  "confidence": 90.0,
+  "reason": "Несанкционированная реклама и призыв подписаться на сторонний канал с использованием обфускации символов",
+  "suggested_action": "delete_message"
+}
 """
+
 
 
 
