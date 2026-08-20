@@ -75,14 +75,23 @@ services:
     networks:
       - warden_network
 
-
-
+  # Optional Free Cloudflare Tunnel for WebApp HTTPS access (Zero-Config)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: warden_cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    profiles:
+      - tunnel
+    networks:
+      - warden_network
 
 volumes:
   postgres_data:
     name: warden_postgres_data
   redis_data:
     name: warden_redis_data
+
   models_cache:
     name: warden_models_cache
 
