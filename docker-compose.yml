@@ -65,9 +65,18 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
-      - models_cache:/app/models_cache
+      - ./webapp:/app/webapp
+      - ./models_cache:/app/models_cache
+      - ./services:/app/services
+      - ./bot:/app/bot
+      - ./api:/app/api
+      - ./core:/app/core
+      - ./models:/app/models
     networks:
       - warden_network
+
+
+
 
 volumes:
   postgres_data:

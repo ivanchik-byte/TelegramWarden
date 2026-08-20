@@ -29,13 +29,35 @@ class NSFWDetector:
         self._session: Optional[ort.InferenceSession] = None
         self._is_initialized = False
 
+    def _download_model_if_needed(self) -> None:
+        """Automatically download Yahoo Open-NSFW ONNX weights if not present."""
+        if self.model_path.exists() and self.model_path.stat().st_size > 1_000_000:
+            return
+
+        import urllib.request
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        url = "https://huggingface.co/bluefoxcreation/open-nsfw/resolve/main/open-nsfw.onnx"
+        logger.info(f"Downloading OpenNSFW ONNX weights from {url}...")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=40) as resp:
+                content = resp.read()
+                if len(content) > 1_000_000:
+                    with open(self.model_path, "wb") as f:
+                        f.write(content)
+                    logger.info(f"Downloaded OpenNSFW ONNX weights ({len(content)} bytes)")
+        except Exception as err:
+            logger.warning(f"Failed to auto-download OpenNSFW model: {err}")
+
     def _init_session(self) -> bool:
         """Initialize the ONNX Runtime Inference Session on CPU."""
         if self._is_initialized:
             return self._session is not None
 
-        if not self.model_path.exists():
-            logger.debug(f"NSFW ONNX model not found at {self.model_path}. Will use safe fallback.")
+        self._download_model_if_needed()
+
+        if not self.model_path.exists() or self.model_path.stat().st_size < 1_000_000:
+            logger.warning(f"NSFW ONNX model not found at {self.model_path}. Will use safe fallback.")
             self._is_initialized = True
             return False
 
@@ -59,24 +81,24 @@ class NSFWDetector:
             return False
 
     @classmethod
-    def _preprocess_image(cls, pil_img: Image.Image, target_size: tuple[int, int] = (320, 320)) -> np.ndarray:
-        """Preprocess PIL Image to normalized float32 tensor (1, 3, H, W)."""
+    def _preprocess_image(cls, pil_img: Image.Image, target_size: tuple[int, int] = (224, 224)) -> np.ndarray:
+        """Preprocess PIL Image to Yahoo OpenNSFW BGR tensor with mean subtraction (1, 224, 224, 3)."""
         rgb_img = pil_img.convert("RGB").resize(target_size, Image.Resampling.BILINEAR)
-        arr = np.array(rgb_img, dtype=np.float32) / 255.0
+        arr = np.array(rgb_img, dtype=np.float32)
 
-        # Standard ImageNet normalization: (x - mean) / std
-        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-        norm_arr = (arr - mean) / std
+        # Convert RGB to BGR
+        bgr = arr[:, :, ::-1]
 
-        # Transpose from (H, W, C) to (C, H, W) and add batch dimension (1, C, H, W)
-        tensor = np.transpose(norm_arr, (2, 0, 1))
-        return np.expand_dims(tensor, axis=0)
+        # Yahoo OpenNSFW Caffe Mean Subtraction
+        mean_bgr = np.array([104.00698793, 116.66876762, 122.67891434], dtype=np.float32)
+        bgr_sub = bgr - mean_bgr
+
+        # Shape: (1, 224, 224, 3)
+        return np.expand_dims(bgr_sub, axis=0)
 
     def _sync_detect(self, pil_img: Image.Image) -> NSFWDetectionResult:
         """Execute synchronous model inference on CPU."""
         if not self._init_session() or self._session is None:
-            # Model file not present in test/offline environment -> safe clean default
             return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[])
 
         try:
@@ -84,16 +106,16 @@ class NSFWDetector:
             input_name = self._session.get_inputs()[0].name
             outputs = self._session.run(None, {input_name: tensor})
 
-            # Check output probabilities (sigmoid/softmax)
+            # Output shape (1, 2): [Safe probability, NSFW probability]
             raw_scores = outputs[0]
             if len(raw_scores.shape) == 2 and raw_scores.shape[1] >= 2:
-                # Binary / Multiclass probabilities [Safe, NSFW]
                 nsfw_prob = float(raw_scores[0][1])
-                is_nsfw = nsfw_prob > 0.80
+                # Threshold at 70% confidence for adult material
+                is_nsfw = nsfw_prob > 0.70
                 return NSFWDetectionResult(
                     is_nsfw=is_nsfw,
                     confidence=round(nsfw_prob * 100, 2),
-                    detected_classes=["EXPOSED_CONTENT"] if is_nsfw else ["SAFE"],
+                    detected_classes=["ADULT_NSFW_EXPOSED"] if is_nsfw else ["SAFE"],
                 )
 
             return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[])
@@ -109,3 +131,4 @@ class NSFWDetector:
 
 # Global NSFW detector singleton
 nsfw_detector = NSFWDetector()
+
