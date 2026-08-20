@@ -14,7 +14,7 @@ class CASCheckResult(NamedTuple):
 
     is_banned: bool
     offenses_count: int
-    time_added: Optional[int]
+    time_added: Optional[str]
 
 
 class CASClient:
