@@ -65,6 +65,7 @@ async def init_db() -> None:
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_nsfw_filter_enabled BOOLEAN DEFAULT TRUE",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_qr_filter_enabled BOOLEAN DEFAULT TRUE",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_ocr_filter_enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE chats ADD COLUMN IF NOT EXISTS warn_expiration_days INTEGER DEFAULT 7",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS night_mode_timezone VARCHAR(64) DEFAULT 'UTC'",
         ]
         for sql in migrations:

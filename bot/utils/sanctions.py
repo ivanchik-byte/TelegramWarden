@@ -73,15 +73,18 @@ class SanctionsExecutor:
         """Issue a warning and apply punishment if warn limit is reached."""
         now = datetime.now(timezone.utc)
 
-        # 1. Create Warn entry
+        # 1. Create Warn entry with chat-configured expiration
+        exp_days = getattr(chat_db, 'warn_expiration_days', 7) or 7
         warn = Warn(
             user_id=user_db.id,
             chat_id=chat_db.chat_id,
             reason=reason,
             category=category,
             message_id=message_id,
+            expires_at=now + timedelta(days=exp_days),
         )
         session.add(warn)
+
         user_db.total_violations_count += 1
         user_db.reputation_score = max(0, user_db.reputation_score - 15)
         await session.flush()

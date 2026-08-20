@@ -40,6 +40,7 @@ class ChatSettingsResponseSchema(BaseModel):
     media_qr_filter_enabled: bool
     media_ocr_filter_enabled: bool
     warn_limit: int
+    warn_expiration_days: int = 7
     warn_punishment: str
     warn_mute_duration_minutes: int
     night_mode_enabled: bool
@@ -76,6 +77,7 @@ class ChatSettingsUpdateSchema(BaseModel):
     media_qr_filter_enabled: Optional[bool] = None
     media_ocr_filter_enabled: Optional[bool] = None
     warn_limit: Optional[int] = Field(None, ge=1, le=10)
+    warn_expiration_days: Optional[int] = Field(None, ge=1, le=90)
     warn_punishment: Optional[str] = None
     warn_mute_duration_minutes: Optional[int] = None
     night_mode_enabled: Optional[bool] = None

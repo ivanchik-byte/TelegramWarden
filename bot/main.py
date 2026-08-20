@@ -10,6 +10,8 @@ from api.main import app as fastapi_app
 from aiogram.types import MenuButtonWebApp, WebAppInfo
 from bot.handlers.admin_actions import router as admin_actions_router
 from bot.handlers.admin_management import router as admin_mgmt_router
+from bot.handlers.moderation_commands import router as moderation_commands_router
+from bot.handlers.user_commands import router as user_commands_router
 from bot.handlers.appeals import router as appeals_router
 from bot.handlers.edited_messages import router as edited_router
 from bot.handlers.joins import router as joins_router
@@ -33,9 +35,9 @@ async def run_fastapi_server() -> None:
         host=settings.API_HOST,
         port=settings.API_PORT,
         log_level="warning",
+        access_log=False,
     )
     server = uvicorn.Server(config)
-    logger.info(f"FastAPI Mini App Server running on http://{settings.API_HOST}:{settings.API_PORT}")
     await server.serve()
 
 
@@ -60,6 +62,8 @@ async def main() -> None:
 
     # 4. Attach Event Routers
     dp.include_router(start_router)
+    dp.include_router(user_commands_router)
+    dp.include_router(moderation_commands_router)
     dp.include_router(admin_mgmt_router)
     dp.include_router(appeals_router)
     dp.include_router(settings_router)

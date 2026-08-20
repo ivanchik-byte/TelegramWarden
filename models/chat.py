@@ -57,6 +57,7 @@ class Chat(Base, TimestampMixin):
 
     # 5. Sanctions & Warnings
     warn_limit: Mapped[int] = mapped_column(Integer, default=3)
+    warn_expiration_days: Mapped[int] = mapped_column(Integer, default=7)  # Warns expire after N days
     warn_punishment: Mapped[str] = mapped_column(String(32), default="mute")  # 'mute', 'ban', 'kick'
     warn_mute_duration_minutes: Mapped[int] = mapped_column(Integer, default=1440)  # 24 hours
 
