@@ -67,7 +67,18 @@ class RiskScorer:
 
         # 6. High-risk keywords in canonical text
         lowered_canonical = sanitized.canonical_text.lower()
-        matched_keywords = [kw for kw in HIGH_RISK_TRIGGER_KEYWORDS if kw in lowered_canonical]
+        import re
+        matched_keywords = []
+        for kw in HIGH_RISK_TRIGGER_KEYWORDS:
+            if len(kw) <= 3:
+                # Require isolated word boundary for short abbreviations like "цп", "cp", "дп", "ск", "18+"
+                pattern = r'(?:^|\s|[^\w\d])' + re.escape(kw) + r'(?:$|\s|[^\w\d])'
+                if re.search(pattern, lowered_canonical):
+                    matched_keywords.append(kw)
+            else:
+                if kw in lowered_canonical:
+                    matched_keywords.append(kw)
+
         if matched_keywords:
             risk_score += 40
             trigger_reasons.append(f"keywords_matched:{','.join(matched_keywords[:3])}")

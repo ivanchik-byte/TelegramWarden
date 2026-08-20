@@ -40,7 +40,7 @@ class AIClientDispatcher:
 
     @classmethod
     def _extract_and_parse_json(cls, raw_content: str) -> AIModerationVerdict:
-        """Extract JSON block and parse into strict Pydantic model."""
+        """Extract JSON block and parse into strict Pydantic model with calibrated threat risk."""
         clean_json_str = raw_content.strip()
 
         # Check for markdown code fence
@@ -49,6 +49,24 @@ class AIClientDispatcher:
             clean_json_str = match.group(1).strip()
 
         parsed_dict = json.loads(clean_json_str)
+
+        # Normalize Confidence to Threat Risk (0% = Safe Green, 100% = Danger Red)
+        is_violation = bool(parsed_dict.get("is_violation", False))
+        category = str(parsed_dict.get("category", "clean")).lower()
+        conf = float(parsed_dict.get("confidence", 0.0))
+
+        if not is_violation or category == "clean":
+            parsed_dict["is_violation"] = False
+            parsed_dict["category"] = "clean"
+            # If LLM returned 99% (meaning 99% clean), invert to 1% Threat Risk
+            if conf > 50.0:
+                parsed_dict["confidence"] = max(1.0, round(100.0 - conf, 1))
+            elif conf <= 0.0:
+                parsed_dict["confidence"] = 1.0
+            else:
+                parsed_dict["confidence"] = min(conf, 15.0)
+            parsed_dict["suggested_action"] = "pass_message"
+
         return AIModerationVerdict.model_validate(parsed_dict)
 
     async def analyze_message(

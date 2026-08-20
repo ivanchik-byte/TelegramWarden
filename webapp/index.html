@@ -193,6 +193,14 @@
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+    .scroll-touch-x {
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      -webkit-overflow-scrolling: touch !important;
+      touch-action: pan-x !important;
+      scroll-behavior: smooth;
+    }
+
     /* Animations */
     @keyframes fadeInScale {
       from { opacity: 0; transform: scale(0.97); }
@@ -1341,28 +1349,56 @@
           )}
 
           {result && (
-            <div className={`glass-card p-4 space-y-2 border-l-4 anim-fade ${
-              result.is_violation ? 'border-l-rose-500 bg-rose-950/10' : 'border-l-emerald-500 bg-emerald-950/10'
+            <div className={`glass-card p-4 space-y-2.5 border-l-4 anim-fade ${
+              !result.is_violation
+                ? 'border-l-emerald-500 bg-emerald-950/10'
+                : result.confidence < 85
+                ? 'border-l-amber-500 bg-amber-950/10'
+                : 'border-l-rose-500 bg-rose-950/10'
             }`}>
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  {result.is_violation ? Icons.alert('#e11d48', 16) : Icons.check('#10b981', 16)}
+                  {!result.is_violation
+                    ? Icons.check('#10b981', 16)
+                    : result.confidence < 85
+                    ? Icons.alert('#f59e0b', 16)
+                    : Icons.alert('#e11d48', 16)}
                   <span className={`text-xs font-bold uppercase tracking-wider ${
-                    result.is_violation ? 'text-rose-400' : 'text-emerald-400'
+                    !result.is_violation
+                      ? 'text-emerald-400'
+                      : result.confidence < 85
+                      ? 'text-amber-400'
+                      : 'text-rose-400'
                   }`}>
-                    {result.is_violation ? 'Угроза обнаружена' : 'Сообщение чистое'}
+                    {!result.is_violation
+                      ? 'Сообщение чистое (Безопасно)'
+                      : result.confidence < 85
+                      ? 'На рассмотрении (Подозрение)'
+                      : 'Критическая угроза (БАН)'}
                   </span>
                 </div>
-                <span className="font-mono-code text-xs font-bold text-slate-200">
-                  {result.confidence?.toFixed(1)}%
-                </span>
+                <div className="flex items-center gap-1.5 font-mono-code text-xs font-bold">
+                  <span className="text-[10px] text-slate-400">Риск:</span>
+                  <span className={`px-2 py-0.5 rounded-lg border ${
+                    !result.is_violation
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : result.confidence < 85
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {result.confidence?.toFixed(1)}%
+                  </span>
+                </div>
               </div>
 
-              <p className="text-xs font-semibold text-slate-200 pt-1">
-                Категория: {result.category}
-              </p>
+              <div className="flex items-center justify-between text-xs pt-1">
+                <span className="text-slate-400">Категория:</span>
+                <span className="font-mono-code font-bold text-slate-200 bg-[#07090e] px-2 py-0.5 rounded border border-[#1a2233]">
+                  {result.category}
+                </span>
+              </div>
               
-              <p className="text-xs text-slate-300 leading-relaxed bg-[#07090e]/60 p-2.5 rounded-xl border border-[#1a2233]">
+              <p className="text-xs text-slate-300 leading-relaxed bg-[#07090e]/60 p-3 rounded-xl border border-[#1a2233]">
                 {result.reason}
               </p>
             </div>
@@ -1593,8 +1629,26 @@
             </div>
           </div>
 
-          {/* Horizontal Scrollable Table Selector Cards */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          {/* Horizontal Scrollable Table Selector Cards with Drag & Touch Momentum */}
+          <div
+            className="scroll-touch-x flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1 select-none active:cursor-grabbing cursor-grab"
+            onMouseDown={(e) => {
+              const el = e.currentTarget;
+              el.isDown = true;
+              el.startX = e.pageX - el.offsetLeft;
+              el.scrollLeftStart = el.scrollLeft;
+            }}
+            onMouseLeave={(e) => { e.currentTarget.isDown = false; }}
+            onMouseUp={(e) => { e.currentTarget.isDown = false; }}
+            onMouseMove={(e) => {
+              const el = e.currentTarget;
+              if (!el.isDown) return;
+              e.preventDefault();
+              const x = e.pageX - el.offsetLeft;
+              const walk = (x - el.startX) * 1.5;
+              el.scrollLeft = el.scrollLeftStart - walk;
+            }}
+          >
             {tables.map((tbl) => {
               const active = tbl.id === selectedTable;
               return (
@@ -1606,22 +1660,22 @@
                     setSearchQuery('');
                     window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
                   }}
-                  className={`shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border transition-all ${
+                  className={`shrink-0 min-w-[150px] flex items-center gap-2.5 px-4 py-3 rounded-2xl border transition-all ${
                     active
-                      ? 'bg-gradient-to-r from-rose-950/60 to-[#0d111a] border-rose-500 shadow-lg shadow-rose-950/40 scale-[1.02]'
+                      ? 'bg-gradient-to-r from-rose-950/70 to-[#0d111a] border-rose-500 shadow-lg shadow-rose-950/40 scale-[1.02]'
                       : 'bg-[#0d111a] text-slate-400 border-[#1a2233] hover:text-slate-200 hover:border-slate-700'
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                     active ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-400'
                   }`}>
-                    {Icons.table('currentColor', 14)}
+                    {Icons.table('currentColor', 15)}
                   </div>
                   <div className="text-left">
                     <p className={`text-xs font-bold leading-tight ${active ? 'text-white' : 'text-slate-300'}`}>
                       {tbl.title}
                     </p>
-                    <p className="text-[10px] font-mono-code text-slate-500">
+                    <p className="text-[10px] font-mono-code text-slate-500 mt-0.5">
                       {tbl.total_rows} записей
                     </p>
                   </div>
@@ -1629,6 +1683,7 @@
               );
             })}
           </div>
+
 
           {/* Search Bar */}
           <div className="relative">
