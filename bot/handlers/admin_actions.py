@@ -127,7 +127,7 @@ async def handle_admin_ban_action(callback: CallbackQuery, session: AsyncSession
     admin_id = callback.from_user.id
 
     try:
-        from bot.services.sanctions import SanctionsExecutor
+        from bot.utils.sanctions import SanctionsExecutor
         res_u = await session.execute(
             select(User).where(User.chat_id == chat_id, User.telegram_id == telegram_id)
         )
@@ -166,7 +166,7 @@ async def handle_admin_mute_action(callback: CallbackQuery, session: AsyncSessio
     admin_id = callback.from_user.id
 
     try:
-        from bot.services.sanctions import SanctionsExecutor
+        from bot.utils.sanctions import SanctionsExecutor
         res_u = await session.execute(
             select(User).where(User.chat_id == chat_id, User.telegram_id == telegram_id)
         )
