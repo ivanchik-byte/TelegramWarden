@@ -131,6 +131,16 @@ async def update_chat_settings(
 
     # Apply partial updates
     update_data = payload.model_dump(exclude_unset=True)
+
+    # Privilege-related lists may only be managed by global superadmins:
+    # a whitelisted member must not be able to extend their own access.
+    privileged_fields = {"whitelisted_users", "whitelisted_channels", "whitelisted_bots"}
+    if not is_super and privileged_fields.intersection(update_data):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only superadmins may modify whitelists",
+        )
+
     for field, value in update_data.items():
         setattr(chat_db, field, value)
 

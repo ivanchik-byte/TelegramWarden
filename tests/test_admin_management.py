@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
-from bot.utils.admin_checker import is_chat_admin, is_superadmin
+from bot.utils.admin_checker import is_chat_admin, is_superadmin, is_moderation_exempt
 from core.config import settings
 from models import Chat
 
@@ -28,14 +28,26 @@ async def test_is_chat_admin_superadmin_bypass():
 
 
 @pytest.mark.asyncio
-async def test_is_chat_admin_whitelist(db_session: AsyncSession):
-    """Verify whitelisted user in chat DB passes admin check."""
+async def test_whitelist_does_not_grant_admin_rights():
+    """Security: whitelist membership exempts from moderation but grants no admin power."""
     chat = Chat(chat_id=-100999, title="Whitelist Group", whitelisted_users=[444555])
     mock_bot = MagicMock()
+    mock_bot.get_chat_member = AsyncMock(return_value=MagicMock(status="member"))
 
-    result = await is_chat_admin(mock_bot, chat_id=-100999, user_id=444555, chat_db=chat)
+    assert await is_chat_admin(mock_bot, chat_id=-100999, user_id=444555, chat_db=chat) is False
+    # ...but their messages still bypass moderation
+    assert is_moderation_exempt(444555, chat) is True
+    assert is_moderation_exempt(111222, None) is False
+
+
+@pytest.mark.asyncio
+async def test_telegram_native_admin_passes_check():
+    """Verify Telegram creator/administrator status passes the admin check."""
+    mock_bot = MagicMock()
+    mock_bot.get_chat_member = AsyncMock(return_value=MagicMock(status="administrator"))
+
+    result = await is_chat_admin(mock_bot, chat_id=-1001, user_id=555000)
     assert result is True
-    mock_bot.get_chat_member.assert_not_called()
 
 
 @pytest.mark.asyncio

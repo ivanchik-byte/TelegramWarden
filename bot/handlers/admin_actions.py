@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.logger import logger
 from models import AuditLog, User, Warn
+from bot.utils.admin_checker import is_chat_admin
 
 router = Router(name="admin_actions")
 
@@ -15,6 +16,19 @@ UNRESTRICTED_PERMISSIONS = ChatPermissions(
     can_send_other_messages=True,
     can_add_web_page_previews=True,
 )
+
+
+async def ensure_admin(callback: CallbackQuery, session: AsyncSession, chat_id: int) -> bool:
+    """Gate every card action behind a real admin check.
+
+    Moderation cards may be visible to the whole group (no log channel), so
+    every log:* callback must verify the clicker's privileges server-side.
+    """
+    if await is_chat_admin(callback.bot, chat_id, callback.from_user.id):
+        return True
+    logger.warning(f"Non-admin {callback.from_user.id} attempted card action in chat {chat_id}")
+    await callback.answer(text="Действие доступно только администраторам чата.", show_alert=True)
+    return False
 
 
 @router.callback_query(F.data.startswith("log:unban:"))
@@ -31,6 +45,9 @@ async def handle_admin_unban(callback: CallbackQuery, session: AsyncSession) -> 
     telegram_id = int(parts[3])
     log_id = int(parts[4])
     admin_id = callback.from_user.id
+
+    if not await ensure_admin(callback, session, chat_id):
+        return
 
     try:
         # Unban in Telegram
@@ -77,6 +94,9 @@ async def handle_admin_unwarn(callback: CallbackQuery, session: AsyncSession) ->
     telegram_id = int(parts[3])
     log_id = int(parts[4])
     admin_id = callback.from_user.id
+
+    if not await ensure_admin(callback, session, chat_id):
+        return
 
     try:
         # Deactivate latest active warn
@@ -126,6 +146,9 @@ async def handle_admin_ban_action(callback: CallbackQuery, session: AsyncSession
     log_id = int(parts[4])
     admin_id = callback.from_user.id
 
+    if not await ensure_admin(callback, session, chat_id):
+        return
+
     try:
         from bot.utils.sanctions import SanctionsExecutor
         res_u = await session.execute(
@@ -164,6 +187,9 @@ async def handle_admin_mute_action(callback: CallbackQuery, session: AsyncSessio
     telegram_id = int(parts[3])
     log_id = int(parts[4])
     admin_id = callback.from_user.id
+
+    if not await ensure_admin(callback, session, chat_id):
+        return
 
     try:
         from bot.utils.sanctions import SanctionsExecutor
@@ -205,6 +231,9 @@ async def handle_admin_false_positive(callback: CallbackQuery, session: AsyncSes
     try:
         audit_entry = await session.get(AuditLog, log_id)
         if audit_entry:
+            # false_pos carries no chat_id in its payload: resolve via audit entry
+            if not await ensure_admin(callback, session, audit_entry.chat_id):
+                return
             audit_entry.is_false_positive = True
             audit_entry.reviewed_by_admin_id = admin_id
             audit_entry.admin_action_taken = "marked_false_positive"

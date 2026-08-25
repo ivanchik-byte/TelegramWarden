@@ -1,11 +1,14 @@
 """Unit tests for admin action callbacks and keyboards."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.admin_logs import get_admin_log_keyboard
 from bot.handlers.admin_actions import handle_admin_false_positive, handle_admin_unban, handle_admin_ban_action, handle_admin_mute_action
+from core.config import settings
 from models import AuditLog, Chat, User
+
+SUPERADMIN_ID = 999999
 
 
 def test_admin_log_keyboard_ban_mode():
@@ -47,17 +50,18 @@ async def test_admin_false_positive_callback(db_session: AsyncSession):
     # Mock callback query
     mock_callback = MagicMock()
     mock_callback.data = f"log:false_pos:{log_entry.id}"
-    mock_callback.from_user.id = 999999
+    mock_callback.from_user.id = SUPERADMIN_ID
     mock_callback.from_user.first_name = "SuperAdmin"
     mock_callback.message.edit_reply_markup = AsyncMock()
     mock_callback.message.reply = AsyncMock()
     mock_callback.answer = AsyncMock()
 
-    await handle_admin_false_positive(callback=mock_callback, session=db_session)
+    with patch.object(settings, "SUPERADMIN_IDS", str(SUPERADMIN_ID)):
+        await handle_admin_false_positive(callback=mock_callback, session=db_session)
 
     updated_log = await db_session.get(AuditLog, log_entry.id)
     assert updated_log.is_false_positive is True
-    assert updated_log.reviewed_by_admin_id == 999999
+    assert updated_log.reviewed_by_admin_id == SUPERADMIN_ID
     assert updated_log.admin_action_taken == "marked_false_positive"
     mock_callback.answer.assert_called_once()
 
@@ -85,18 +89,55 @@ async def test_admin_ban_action_callback(db_session: AsyncSession):
     mock_callback.data = f"log:ban:{-100901}:{333223}:{log_entry.id}"
     mock_callback.bot = AsyncMock()
     mock_callback.bot.ban_chat_member = AsyncMock()
-    mock_callback.from_user.id = 999999
+    mock_callback.from_user.id = SUPERADMIN_ID
     mock_callback.from_user.first_name = "SuperAdmin"
     mock_callback.message.edit_reply_markup = AsyncMock()
     mock_callback.message.reply = AsyncMock()
     mock_callback.answer = AsyncMock()
 
-    await handle_admin_ban_action(callback=mock_callback, session=db_session)
+    with patch.object(settings, "SUPERADMIN_IDS", str(SUPERADMIN_ID)):
+        await handle_admin_ban_action(callback=mock_callback, session=db_session)
 
     updated_log = await db_session.get(AuditLog, log_entry.id)
-    assert updated_log.reviewed_by_admin_id == 999999
+    assert updated_log.reviewed_by_admin_id == SUPERADMIN_ID
     assert updated_log.admin_action_taken == "banned_by_admin"
     mock_callback.bot.ban_chat_member.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_ban_from_card(db_session: AsyncSession):
+    """Security: a random group member clicking the card button must not ban."""
+    chat = Chat(chat_id=-100903, title="Security Group 4")
+    user = User(chat_id=-100903, telegram_id=333225, first_name="Target")
+    db_session.add_all([chat, user])
+    await db_session.commit()
+
+    log_entry = AuditLog(
+        chat_id=chat.chat_id,
+        user_id=user.id,
+        action_type="warn",
+        category="spam",
+        reason="Test suspicion",
+        confidence=85.0,
+    )
+    db_session.add(log_entry)
+    await db_session.commit()
+
+    mock_callback = MagicMock()
+    mock_callback.data = f"log:ban:{-100903}:{333225}:{log_entry.id}"
+    mock_callback.bot = AsyncMock()
+    mock_callback.bot.ban_chat_member = AsyncMock()
+    mock_callback.bot.get_chat_member = AsyncMock(return_value=MagicMock(status="member"))
+    mock_callback.from_user.id = 111222  # random member, not admin anywhere
+    mock_callback.answer = AsyncMock()
+
+    with patch.object(settings, "SUPERADMIN_IDS", "777888"):
+        await handle_admin_ban_action(callback=mock_callback, session=db_session)
+
+    mock_callback.bot.ban_chat_member.assert_not_called()
+    mock_callback.answer.assert_called_once()
+    updated_log = await db_session.get(AuditLog, log_entry.id)
+    assert updated_log.reviewed_by_admin_id is None
 
 
 @pytest.mark.asyncio
@@ -122,15 +163,16 @@ async def test_admin_mute_action_callback(db_session: AsyncSession):
     mock_callback.data = f"log:mute:{-100902}:{333224}:{log_entry.id}"
     mock_callback.bot = AsyncMock()
     mock_callback.bot.restrict_chat_member = AsyncMock()
-    mock_callback.from_user.id = 999999
+    mock_callback.from_user.id = SUPERADMIN_ID
     mock_callback.from_user.first_name = "SuperAdmin"
     mock_callback.message.edit_reply_markup = AsyncMock()
     mock_callback.message.reply = AsyncMock()
     mock_callback.answer = AsyncMock()
 
-    await handle_admin_mute_action(callback=mock_callback, session=db_session)
+    with patch.object(settings, "SUPERADMIN_IDS", str(SUPERADMIN_ID)):
+        await handle_admin_mute_action(callback=mock_callback, session=db_session)
 
     updated_log = await db_session.get(AuditLog, log_entry.id)
-    assert updated_log.reviewed_by_admin_id == 999999
+    assert updated_log.reviewed_by_admin_id == SUPERADMIN_ID
     assert updated_log.admin_action_taken == "muted_by_admin"
     mock_callback.bot.restrict_chat_member.assert_called_once()

@@ -14,22 +14,33 @@ def is_superadmin(user_id: int) -> bool:
     return user_id in settings.superadmin_id_list
 
 
+def is_moderation_exempt(user_id: int, chat_db: Optional[Chat]) -> bool:
+    """Check if the user's messages skip moderation entirely.
+
+    Being exempt from moderation is NOT a moderation privilege: whitelisted
+    members gain nothing beyond immunity of their own messages.
+    """
+    if is_superadmin(user_id):
+        return True
+    return bool(chat_db and chat_db.whitelisted_users and user_id in chat_db.whitelisted_users)
+
+
 async def is_chat_admin(
     bot: Bot,
     chat_id: int,
     user_id: int,
     chat_db: Optional[Chat] = None,
 ) -> bool:
-    """Verify if user has administrative rights over a specific chat."""
+    """Verify if user has administrative rights over a specific chat.
+
+    Only global superadmins and Telegram-native chat administrators may
+    moderate. Chat whitelist membership deliberately grants no privileges.
+    """
     # 1. Superadmin global bypass from .env
     if is_superadmin(user_id):
         return True
 
-    # 2. Whitelisted user in chat DB
-    if chat_db and chat_db.whitelisted_users and user_id in chat_db.whitelisted_users:
-        return True
-
-    # 3. Direct Telegram chat member status check
+    # 2. Direct Telegram chat member status check
     if chat_id < 0:
         try:
             member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
@@ -59,12 +70,7 @@ async def get_user_administered_chats(
 
     accessible_chats = []
     for chat_db in all_chats:
-        # Check whitelist in DB first
-        if chat_db.whitelisted_users and user_id in chat_db.whitelisted_users:
-            accessible_chats.append(chat_db)
-            continue
-
-        # Check Telegram chat status
+        # Check Telegram chat status (whitelist grants no admin privileges)
         try:
             member = await bot.get_chat_member(chat_id=chat_db.chat_id, user_id=user_id)
             if member.status in ("creator", "administrator"):
