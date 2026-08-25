@@ -126,6 +126,23 @@ class MediaModerationPipeline:
             frame.save(buffer, format="JPEG", quality=85)
             encoded_frames.append((frame, buffer.getvalue()))
 
+        # Videos cannot be hashed from raw container bytes: derive the spam
+        # fingerprint from the first decoded frame instead.
+        if not phash_str and encoded_frames and media_type in ("video", "video_note", "animation"):
+            phash_str = await asyncio.to_thread(
+                PHashDeduplicator.compute_hash, encoded_frames[0][1]
+            )
+            if phash_str and await PHashDeduplicator.is_known_spam(phash_str):
+                logger.info("Known spam pHash detected on video keyframe")
+                return MediaModerationVerdict(
+                    is_violation=True,
+                    category=ViolationCategory.COMMERCIAL_AD,
+                    confidence=99.0,
+                    reason="Обнаружен известный спам по визуальному отпечатку (pHash)",
+                    suggested_action=SuggestedAction.BAN_USER,
+                    evidence_frame_bytes=encoded_frames[0][1],
+                )
+
         # A. NSFW Local Detector (hard signal, highest priority)
         nsfw_checked = False
         if scan_nsfw:

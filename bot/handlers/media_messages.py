@@ -121,6 +121,30 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
             return
 
     # 4. Determine media target and download into memory (no disk write)
+    # Animated TGS (Lottie) stickers cannot be decoded by any local scanner:
+    # they must not silently pass — delete and hand to admin review.
+    if message.sticker and getattr(message.sticker, "is_animated", False):
+        logger.info(f"Animated TGS sticker from {user_id} in {chat_id} — unscannable, held for review")
+        await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
+        audit_entry = AuditLog(
+            chat_id=chat_id,
+            user_id=user_db.id,
+            action_type="review_required",
+            category=ViolationCategory.ADULT_NSFW.value,
+            reason="[TGS] Анимированный стикер не поддается локальному скану — проверьте вручную",
+            confidence=0.0,
+            raw_message_snippet="[TGS STICKER]",
+        )
+        session.add(audit_entry)
+        await session.flush()
+        await send_admin_review_card(
+            bot=message.bot, chat_db=chat_db, user_name=message.from_user.full_name, user_id=user_id,
+            message_preview="[TGS STICKER]", category="adult_nsfw",
+            confidence=0.0, reason="Анимированный стикер удалён: локальный скан недоступен",
+            audit_entry_id=audit_entry.id,
+        )
+        return
+
     media_type, file_target, low_res_scan = _select_media_target(message)
     if not file_target:
         return
@@ -209,9 +233,10 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     user_name = message.from_user.full_name
     preview = f"[{str(media_type).upper()}] {verdict.reason}"
 
-    # Night mode: delete and log for review, defer punitive sanctions
-    # (known spam pHash fingerprints stay enforced — they are deterministic)
-    if is_night_mode_active(chat_db) and verdict.category != ViolationCategory.ADULT_NSFW:
+    # Night mode: defer ONLY soft admin-review signals (QR/OCR). Deterministic
+    # evidence — NSFW detections and known-spam pHash fingerprints — stays
+    # enforced around the clock, matching the policy comment below.
+    if is_night_mode_active(chat_db) and verdict.requires_admin_review:
         logger.info(f"Night mode active in chat {chat_id}: media sanction deferred for user {user_id}")
         audit_entry = AuditLog(
             chat_id=chat_id,
@@ -379,7 +404,27 @@ async def handle_document_message(message: Message, session: AsyncSession) -> No
     # Download first, then trust the bytes — declared MIME is attacker-
     # controlled (application/octet-stream is a classic NSFW disguise)
     if file_size > MAX_ORIGINAL_SCAN_BYTES:
-        logger.info(f"Document {document.file_name!r} ({file_size} bytes) exceeds scan limit in {chat_id}")
+        # Oversized files cannot be scanned locally; they are NOT deleted
+        # (legit archives exist) but admins must see them, not silence.
+        logger.info(f"Oversized document {document.file_name!r} ({file_size} bytes) in {chat_id} — flagged for review")
+        audit_entry = AuditLog(
+            chat_id=chat_id,
+            user_id=user_db.id,
+            action_type="review_required",
+            category=ViolationCategory.OTHER_VIOLATION.value,
+            reason=f"[Документ >{MAX_ORIGINAL_SCAN_BYTES // (1024*1024)}МБ] Файл превышает лимит сканирования",
+            confidence=0.0,
+            raw_message_snippet=f"[DOCUMENT {(document.file_name or '')[:60]}]",
+        )
+        session.add(audit_entry)
+        await session.flush()
+        await send_admin_review_card(
+            bot=message.bot, chat_db=chat_db, user_name=message.from_user.full_name, user_id=user_id,
+            message_preview=f"[DOCUMENT {(document.file_name or '')[:60]}] {file_size} bytes",
+            category=ViolationCategory.OTHER_VIOLATION.value, confidence=0.0,
+            reason="Крупный файл не поддается локальному сканированию — проверьте вручную",
+            audit_entry_id=audit_entry.id,
+        )
         return
 
     try:
