@@ -1,4 +1,9 @@
-"""Edited message handler protecting against stealth edit spam attacks."""
+"""Edited message handler protecting against stealth edit spam attacks.
+
+Reuses the shared moderation core so edits follow the exact same policy
+as fresh messages: review thresholds, moderation modes, category actions,
+night mode and tiered sanctions — with an "edited" marker on every reason.
+"""
 
 from datetime import datetime, timezone
 
@@ -7,16 +12,12 @@ from aiogram.types import Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.utils.notices import send_admin_review_card
 from bot.utils.sanctions import SanctionsExecutor
-from bot.utils.text_moderation import extract_entity_urls
+from bot.utils.text_moderation import extract_entity_urls, moderate_text_content
 from core.logger import logger
-from models import AuditLog, Chat
-from services.ai.client import ai_dispatcher
+from models import Chat
 from services.ai.normalizer import TextSanitizer
 from services.ai.risk_scorer import RiskScorer
-from services.ai.schema import SuggestedAction
-from services.moderation.night_mode import is_night_mode_active
 
 router = Router(name="edited_messages")
 
@@ -52,8 +53,8 @@ async def handle_edited_message(message: Message, session: AsyncSession) -> None
         if url not in sanitized.extracted_urls:
             sanitized.extracted_urls.append(url)
 
-    # Full heuristic pass: an edit turning clean text into a toxic offer with
-    # no links must still reach the LLM (same 0-token filter as normal sends).
+    # Same 0-token heuristic gate as normal sends: an edit turning clean text
+    # into a toxic offer without links must still reach the LLM.
     days_in_chat = (datetime.now(timezone.utc) - user_db.first_seen_at).days
     risk_result = RiskScorer.evaluate(
         sanitized=sanitized,
@@ -71,79 +72,16 @@ async def handle_edited_message(message: Message, session: AsyncSession) -> None
     if not triggered:
         return
 
-    if not (sanitized.extracted_urls or sanitized.extracted_usernames
-            or sanitized.had_invisible_characters):
-        logger.info(
-            f"Edited message flagged by risk scorer in chat {chat_id} "
-            f"(score={risk_result.risk_score}, reasons={risk_result.trigger_reasons})"
-        )
-
-    logger.info(f"Edited message contains new links/triggers in chat {chat_id}. Inspecting via AI...")
-    verdict = await ai_dispatcher.analyze_message(
-        message_text=sanitized.clean_text,
-        user_info=f"Edited message by User {user_id}",
-        cache_chat_id=chat_id,
-        cache_user_id=user_id,
+    logger.info(
+        f"Edited message inspection in chat {chat_id} by {user_id}: "
+        f"urls={len(sanitized.extracted_urls)}, risk={risk_result.risk_score}"
     )
-
-    if not verdict.is_violation:
-        return
-
-    cat_key = verdict.category.value
-    # Category disabled by admins -> pass (parity with the main moderation path)
-    if (chat_db.category_actions or {}).get(cat_key) == "ignore":
-        logger.info(f"Category '{cat_key}' is set to IGNORE in chat {chat_id}. Edited message passed.")
-        return
-
-    if verdict.confidence < (chat_db.ai_confidence_threshold or 85.0):
-        return
-
-    preview = sanitized.clean_text[:400]
-    reason = f"Спам через редактирование: {verdict.reason}"
-
-    await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
-
-    # Night mode: defer punitive sanctions, keep delete + review card
-    if is_night_mode_active(chat_db) and verdict.category.value != "illegal_contraband":
-        action_type = "night_mode_review"
-        reason = f"[Ночной режим] {reason}"
-    elif verdict.suggested_action == SuggestedAction.BAN_USER:
-        await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=reason)
-        action_type = "ban_user"
-    else:
-        await SanctionsExecutor.apply_warn(
-            bot=message.bot,
-            session=session,
-            chat_db=chat_db,
-            user_db=user_db,
-            reason=reason,
-            category=cat_key,
-            message_id=message.message_id,
-        )
-        action_type = "warn"
-
-    audit_entry = AuditLog(
-        chat_id=chat_id,
-        user_id=user_db.id,
-        action_type=action_type,
-        category=cat_key,
-        reason=f"Edit attack: {verdict.reason}",
-        confidence=verdict.confidence,
-        raw_message_snippet=preview,
+    await moderate_text_content(
+        bot=message.bot,
+        session=session,
+        message=message,
+        chat_db=chat_db,
+        user_db=user_db,
+        raw_text=message.text or message.caption or "",
+        source_label="Спам через редактирование: ",
     )
-    session.add(audit_entry)
-    await session.flush()
-
-    if chat_db.send_suspicious_to_admin:
-        await send_admin_review_card(
-            bot=message.bot,
-            chat_db=chat_db,
-            user_name=message.from_user.full_name,
-            user_id=user_id,
-            message_preview=sanitized.clean_text,
-            category=cat_key,
-            confidence=verdict.confidence,
-            reason=f"{verdict.reason} (обнаружено при редактировании сообщения)",
-            audit_entry_id=audit_entry.id,
-            is_ban_action=(action_type == "ban_user"),
-        )

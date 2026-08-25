@@ -46,6 +46,7 @@ async def moderate_text_content(
     chat_db: Chat,
     user_db: User,
     raw_text: str,
+    source_label: str = "",
 ) -> bool:
     """Run the full text moderation pipeline over a text payload.
 
@@ -133,7 +134,7 @@ async def moderate_text_content(
             user_id=user_db.id,
             action_type="night_mode_review",
             category=verdict.category.value,
-            reason=f"[Ночной режим] {verdict.reason}",
+            reason=f"{source_label}[Ночной режим] {verdict.reason}",
             confidence=verdict.confidence,
             raw_message_snippet=sanitized.clean_text[:400],
         )
@@ -147,7 +148,7 @@ async def moderate_text_content(
             message_preview=sanitized.clean_text,
             category=verdict.category.value,
             confidence=verdict.confidence,
-            reason=f"{verdict.reason} (ночной режим — санкция отложена)",
+            reason=f"{source_label}{verdict.reason} (ночной режим — санкция отложена)",
             audit_entry_id=audit_entry.id,
         )
         return True
@@ -160,32 +161,34 @@ async def moderate_text_content(
     elif custom_action == "warn":
         await SanctionsExecutor.apply_warn(
             bot=bot, session=session, chat_db=chat_db, user_db=user_db,
-            reason=verdict.reason, category=cat_key, message_id=message.message_id,
+            reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
         )
         action_title = "Удаление + Варн (По правилу чата)"
         action_type = "warn"
     elif custom_action == "mute":
         await SanctionsExecutor.mute_user(
             bot, session, chat_id, user_db,
-            duration_minutes=chat_db.warn_mute_duration_minutes or 1440, reason=verdict.reason,
+            duration_minutes=chat_db.warn_mute_duration_minutes or 1440,
+            reason=f"{source_label}{verdict.reason}",
         )
         action_title = "Удаление + МУТ (По правилу чата)"
         action_type = "mute_user"
     elif custom_action == "ban":
-        await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=verdict.reason)
+        await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=f"{source_label}{verdict.reason}")
         action_title = "Удаление + БАН (По правилу чата)"
         action_type = "ban_user"
     else:
         # Autonomous AI Judge or Strategy Mode
         if mod_mode == "ai_judge":
             if is_severe_contraband or verdict.suggested_action == SuggestedAction.BAN_USER:
-                await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=verdict.reason)
+                await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=f"{source_label}{verdict.reason}")
                 action_title = "Удаление + БАН (Вердикт ИИ-Судьи)"
                 action_type = "ban_user"
             elif verdict.suggested_action == SuggestedAction.MUTE_USER:
                 await SanctionsExecutor.mute_user(
                     bot, session, chat_id, user_db,
-                    duration_minutes=chat_db.warn_mute_duration_minutes or 1440, reason=verdict.reason,
+                    duration_minutes=chat_db.warn_mute_duration_minutes or 1440,
+            reason=f"{source_label}{verdict.reason}",
                 )
                 action_title = "Удаление + МУТ (Вердикт ИИ-Судьи)"
                 action_type = "mute_user"
@@ -195,14 +198,14 @@ async def moderate_text_content(
             else:
                 await SanctionsExecutor.apply_warn(
                     bot=bot, session=session, chat_db=chat_db, user_db=user_db,
-                    reason=verdict.reason, category=cat_key, message_id=message.message_id,
+                    reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
                 )
                 action_title = f"Удаление + Варн (Вердикт ИИ-Судьи, {int(verdict.confidence)}%)"
                 action_type = "warn"
         elif mod_mode == "review_only":
             await SanctionsExecutor.apply_warn(
                 bot=bot, session=session, chat_db=chat_db, user_db=user_db,
-                reason=verdict.reason, category=cat_key, message_id=message.message_id,
+                reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
             )
             action_title = f"Удаление + На рассмотрение (Мягкий режим, {int(verdict.confidence)}%)"
             action_type = "warn"
@@ -210,14 +213,14 @@ async def moderate_text_content(
             not contraband_suspected and verdict.confidence >= ban_threshold
         ):
             # High Confidence Tier -> Ban (low-confidence contraband stays a warn)
-            await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=verdict.reason)
+            await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=f"{source_label}{verdict.reason}")
             action_title = f"Удаление + БАН ({int(verdict.confidence)}% Уверенность)"
             action_type = "ban_user"
         else:
             # Review Tier -> Warn
             await SanctionsExecutor.apply_warn(
                 bot=bot, session=session, chat_db=chat_db, user_db=user_db,
-                reason=verdict.reason, category=cat_key, message_id=message.message_id,
+                reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
             )
             action_title = f"Удаление + Предупреждение ({int(verdict.confidence)}% На проверке)"
             action_type = "warn"
@@ -227,7 +230,7 @@ async def moderate_text_content(
         user_id=user_db.id,
         action_type=action_type,
         category=verdict.category.value,
-        reason=verdict.reason,
+        reason=f"{source_label}{verdict.reason}",
         confidence=verdict.confidence,
         raw_message_snippet=sanitized.clean_text[:400],
     )
@@ -242,7 +245,7 @@ async def moderate_text_content(
         action_title=action_title,
         category=verdict.category.value,
         confidence=verdict.confidence,
-        reason=verdict.reason,
+        reason=f"{source_label}{verdict.reason}",
         audit_entry_id=audit_entry.id,
     )
 
@@ -255,7 +258,7 @@ async def moderate_text_content(
             message_preview=sanitized.clean_text,
             category=verdict.category.value,
             confidence=verdict.confidence,
-            reason=verdict.reason,
+            reason=f"{source_label}{verdict.reason}",
             audit_entry_id=audit_entry.id,
             is_ban_action=(action_type == "ban_user"),
         )
