@@ -232,3 +232,52 @@ async def test_unknown_suggested_action_falls_back_to_warn():
 
     assert verdict.is_violation is True
     assert verdict.suggested_action == SuggestedAction.WARN
+
+
+@pytest.mark.asyncio
+async def test_fail_open_verdict_is_not_cached():
+    """A provider-failure CLEAN verdict must not poison the cache for the TTL."""
+    dispatcher = AIClientDispatcher()
+
+    # First call: both providers fail -> fail-open clean verdict
+    failing = AsyncMock(side_effect=Exception("provider down"))
+    dispatcher.primary_client.chat.completions.create = failing
+
+    first = await dispatcher.analyze_message("одинаковый спам")
+    assert first.is_violation is False
+    assert first.reason == "AI Provider unavailable (fail-open to prevent false bans)"
+    assert dispatcher.fail_open_count == 1
+
+    # Provider recovers: the cached fail-open must NOT shadow the real analysis
+    mock_response = _make_verdict_response({
+        "is_violation": True,
+        "category": "crypto_scam",
+        "confidence": 95.0,
+        "reason": "Скам",
+        "suggested_action": "ban_user",
+    })
+    dispatcher.primary_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    second = await dispatcher.analyze_message("одинаковый спам")
+
+    assert second.is_violation is True
+
+
+@pytest.mark.asyncio
+async def test_string_false_is_not_parsed_as_true():
+    """LLM returning the string 'false' must not trigger a violation (false-ban guard)."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": "false",
+            "category": "clean",
+            "confidence": 5.0,
+            "reason": "Чистое сообщение",
+            "suggested_action": "pass_message",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("привет")
+
+    assert verdict.is_violation is False

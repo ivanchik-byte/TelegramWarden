@@ -20,6 +20,20 @@ from services.ai.schema import (
 
 JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
 
+# Marker reason on the fail-open verdict: such verdicts must never be cached
+FAIL_OPEN_REASON = "AI Provider unavailable (fail-open to prevent false bans)"
+
+_TRUE_STRINGS = {"true", "1", "yes"}
+
+
+def _coerce_bool(value, default: bool = False) -> bool:
+    """Parse LLM booleans strictly: the string 'false' must not become True."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in _TRUE_STRINGS
+    return default
+
 # Per-category confidence bands (floor, ceiling). Ceilings for warn/mute-tier
 # categories stay below the default ban threshold (85%) so that raw LLM
 # overconfidence alone can never trigger a confidence-based ban.
@@ -49,6 +63,7 @@ class AIClientDispatcher:
     def __init__(self) -> None:
         self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
         self._cache: dict[str, tuple[float, AIModerationVerdict]] = {}
+        self.fail_open_count = 0
 
         # Primary client (DeepSeek)
         self.primary_client = AsyncOpenAI(
@@ -80,7 +95,7 @@ class AIClientDispatcher:
 
         # Normalize LLM output fields: an unknown category/action must degrade
         # gracefully instead of failing validation and discarding the verdict.
-        is_violation = bool(parsed_dict.get("is_violation", False))
+        is_violation = _coerce_bool(parsed_dict.get("is_violation", False))
         category_key = str(parsed_dict.get("category", "clean")).lower().strip()
         if category_key not in {c.value for c in ViolationCategory}:
             # A hallucinated category still counts as a flagged violation.
@@ -149,11 +164,17 @@ class AIClientDispatcher:
         async with self._semaphore:
             verdict = await self._dispatch_provider(messages)
 
-        self._cache[cache_key] = (time.monotonic(), verdict)
-        if len(self._cache) > self.CACHE_MAX_ENTRIES:
-            # Drop the oldest quarter instead of scanning for exact LRU order
-            for key in sorted(self._cache, key=lambda k: self._cache[k][0])[: self.CACHE_MAX_ENTRIES // 4]:
-                self._cache.pop(key, None)
+        # Fail-open verdicts must never be cached: one provider hiccup would
+        # otherwise wave identical spam through every chat for the whole TTL.
+        if verdict.reason != FAIL_OPEN_REASON:
+            self._cache[cache_key] = (time.monotonic(), verdict)
+            if len(self._cache) > self.CACHE_MAX_ENTRIES:
+                # Drop the oldest quarter instead of scanning for exact LRU order
+                for key in sorted(self._cache, key=lambda k: self._cache[k][0])[: self.CACHE_MAX_ENTRIES // 4]:
+                    self._cache.pop(key, None)
+        else:
+            self.fail_open_count += 1
+            logger.warning(f"AI moderation fail-open (total: {self.fail_open_count}) — verdict NOT cached")
         return verdict
 
     async def _dispatch_provider(self, messages: list[dict]) -> AIModerationVerdict:
@@ -195,7 +216,7 @@ class AIClientDispatcher:
             is_violation=False,
             category=ViolationCategory.CLEAN,
             confidence=0.0,
-            reason="AI Provider unavailable (fail-open to prevent false bans)",
+            reason=FAIL_OPEN_REASON,
             suggested_action=SuggestedAction.PASS_MESSAGE,
         )
 

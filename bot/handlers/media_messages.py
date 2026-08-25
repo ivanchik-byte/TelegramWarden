@@ -66,6 +66,7 @@ async def _count_prior_nsfw_offenses(session: AsyncSession, user_db: User) -> in
     result = await session.execute(
         select(func.count(AuditLog.id)).where(
             AuditLog.user_id == user_db.id,
+            AuditLog.chat_id == user_db.chat_id,
             AuditLog.category == ViolationCategory.ADULT_NSFW.value,
         )
     )
