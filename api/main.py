@@ -12,6 +12,7 @@ from api.auth import TelegramUser, get_current_telegram_user
 from api.routes.chats import router as chats_router
 from api.routes.database import router as database_router
 from api.routes.stats import router as stats_router
+from core.config import settings
 from core.database import init_db, close_db
 from core.logger import logger
 from core.redis_client import redis_manager
@@ -30,6 +31,9 @@ class ScanRequest(BaseModel):
 async def lifespan(app: FastAPI):
     """Lifespan context manager for database and redis connections."""
     logger.info("Initializing API application services...")
+    # Same fail-fast as the bot entry point: never serve traffic with
+    # default secrets
+    settings.validate_runtime_secrets()
     await init_db()
     await redis_manager.get_client()
     yield
@@ -79,9 +83,13 @@ async def scan_text_endpoint(
     """
     redis = await redis_manager.get_client()
     rate_key = f"warden:scan_ratelimit:{user.id}"
-    calls = await redis.incr(rate_key)
-    if calls == 1:
-        await redis.expire(rate_key, 60)
+    # Atomic MULTI/EXEC: a crash between INCR and EXPIRE would otherwise leave
+    # a key without TTL and 429 the user forever
+    pipe = redis.pipeline(transaction=True)
+    pipe.incr(rate_key)
+    pipe.expire(rate_key, 60)
+    results = await pipe.execute()
+    calls = results[0]
     if calls > 10:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

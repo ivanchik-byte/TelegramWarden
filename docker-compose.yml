@@ -9,7 +9,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-warden_secure_password}
       POSTGRES_DB: ${POSTGRES_DB:-warden_db}
     ports:
-      - "${POSTGRES_PORT:-5434}:5432"
+      # Bound to loopback only: the database must never face the internet.
+      # Remove this mapping entirely in production — containers reach it via
+      # warden_network.
+      - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,13 +29,21 @@ services:
     image: redis:7-alpine
     container_name: warden_redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env - an open Redis lets anyone wipe captcha and rate-limit state}"
     ports:
-      - "${REDIS_PORT:-6380}:6379"
+      # Bound to loopback only; remove entirely in production
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
