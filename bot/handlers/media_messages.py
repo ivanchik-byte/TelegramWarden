@@ -131,10 +131,16 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         logger.warning(f"Failed to download media for inspection: {download_err}")
         return
 
-    # 4. Run local media pipeline honoring per-chat scanner toggles
+    # 4. Run local media pipeline honoring per-chat scanner toggles.
+    # Animations (MP4/GIF) and video stickers (webm) need keyframe sampling,
+    # otherwise PIL cannot decode them and they would silently bypass the scan.
+    is_motion_media = bool(
+        message.video or message.video_note or message.animation
+        or (message.sticker and getattr(message.sticker, "is_video", False))
+    )
     verdict = await MediaModerationPipeline.process_media(
         media_bytes=media_bytes,
-        media_type="photo" if media_type == "photo" else ("video" if "video" in media_type else "animation"),
+        media_type="video" if is_motion_media else "photo",
         scan_nsfw=chat_db.media_nsfw_filter_enabled,
         scan_qr=chat_db.media_qr_filter_enabled,
         scan_ocr=chat_db.media_ocr_filter_enabled,

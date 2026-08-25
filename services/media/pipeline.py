@@ -64,7 +64,8 @@ class MediaModerationPipeline:
 
         # 2. Frame Extraction
         frames: list[Image.Image] = []
-        if media_type in ("video", "video_note"):
+        if media_type in ("video", "video_note", "animation"):
+            # Telegram .animation is an MP4/GIF hybrid: PyAV decodes both
             frames = VideoKeyframeSampler.sample_keyframes(media_bytes, num_frames=5)
         else:
             try:
