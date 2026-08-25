@@ -66,11 +66,26 @@ class AIClientDispatcher:
 
         parsed_dict = json.loads(clean_json_str)
 
-        # Normalize Confidence to Threat Risk (0% = Safe Green, 100% = Danger Red)
+        # Normalize LLM output fields: an unknown category/action must degrade
+        # gracefully instead of failing validation and discarding the verdict.
         is_violation = bool(parsed_dict.get("is_violation", False))
-        category_key = str(parsed_dict.get("category", "clean")).lower()
-        conf = float(parsed_dict.get("confidence", 0.0))
+        category_key = str(parsed_dict.get("category", "clean")).lower().strip()
+        if category_key not in {c.value for c in ViolationCategory}:
+            # A hallucinated category still counts as a flagged violation.
+            category_key = "other_violation" if is_violation else "clean"
+            parsed_dict["category"] = category_key
 
+        action_key = str(parsed_dict.get("suggested_action", "pass_message")).lower().strip()
+        if action_key not in {a.value for a in SuggestedAction}:
+            action_key = "pass_message" if category_key == "clean" else "warn"
+            parsed_dict["suggested_action"] = action_key
+
+        try:
+            conf = float(parsed_dict.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            conf = 0.0
+
+        # Normalize Confidence to Threat Risk (0% = Safe Green, 100% = Danger Red)
         if not is_violation or category_key == "clean":
             # Threat risk of a clean message is always low; clamp instead of
             # inverting so the scale stays monotonic and predictable.

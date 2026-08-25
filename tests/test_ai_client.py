@@ -189,3 +189,46 @@ async def test_calibration_unsure_contraband_is_not_clamped_up():
     assert verdict.category == ViolationCategory.ILLEGAL_CONTRABAND
     assert verdict.confidence == 30.0
     assert verdict.confidence < 85.0
+
+
+@pytest.mark.asyncio
+async def test_unknown_category_from_llm_maps_to_other_violation():
+    """A hallucinated category must not discard the verdict via ValidationError."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "scam",
+            "confidence": 80.0,
+            "reason": "Мошенничество",
+            "suggested_action": "warn",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("переведи мне 500 рублей и получи вдвое больше")
+
+    # Verdict preserved, category degraded gracefully instead of fail-open clean
+    assert verdict.is_violation is True
+    assert verdict.category == ViolationCategory.OTHER_VIOLATION
+
+
+@pytest.mark.asyncio
+async def test_unknown_suggested_action_falls_back_to_warn():
+    """A hallucinated suggested_action must degrade to a safe default, not crash parsing."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "toxic_insult",
+            "confidence": 70.0,
+            "reason": "Оскорбление участника",
+            "suggested_action": "nuke_user",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("ты никто и звать тебя никак")
+
+    assert verdict.is_violation is True
+    assert verdict.suggested_action == SuggestedAction.WARN

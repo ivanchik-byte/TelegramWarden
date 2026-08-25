@@ -45,3 +45,49 @@ def test_high_risk_crypto_keywords_trigger_ai():
 
     assert score_result.should_call_ai is True
     assert any("keywords_matched" in r for r in score_result.trigger_reasons)
+
+
+def test_cyrillic_keywords_match_against_original_text():
+    """Regression: canonical text is Latin-transliterated, so Cyrillic keywords
+    must be matched against the original text too (previously dead logic)."""
+    sanitized = TextSanitizer.sanitize("Куплю крипт и меф, доход гарантирован")
+    score_result = RiskScorer.evaluate(
+        sanitized=sanitized,
+        user_message_count=100,
+        user_days_in_chat=60,
+        sampling_rate=0.0,
+    )
+
+    keyword_reasons = [r for r in score_result.trigger_reasons if r.startswith("keywords_matched")]
+    assert keyword_reasons, "Cyrillic high-risk keywords must trigger AI inspection"
+    assert score_result.should_call_ai is True
+
+
+def test_boundary_keyword_does_not_fire_on_innocent_words():
+    """'залив' must not match inside 'заливное' (word-boundary matching)."""
+    sanitized = TextSanitizer.sanitize("Мама приготовила вкусное заливное на праздник")
+    score_result = RiskScorer.evaluate(
+        sanitized=sanitized,
+        user_message_count=100,
+        user_days_in_chat=60,
+        sampling_rate=0.0,
+    )
+
+    keyword_reasons = [r for r in score_result.trigger_reasons if r.startswith("keywords_matched")]
+    assert not keyword_reasons
+    assert score_result.should_call_ai is False
+
+
+def test_homoglyph_obfuscated_latin_keyword_still_matches():
+    """Latin keywords must still match the transliterated canonical form."""
+    sanitized = TextSanitizer.sanitize("сегодня огромный airdrop от крипто проекта")
+    score_result = RiskScorer.evaluate(
+        sanitized=sanitized,
+        user_message_count=100,
+        user_days_in_chat=60,
+        sampling_rate=0.0,
+    )
+
+    keyword_reasons = [r for r in score_result.trigger_reasons if r.startswith("keywords_matched")]
+    assert keyword_reasons
+    assert score_result.should_call_ai is True

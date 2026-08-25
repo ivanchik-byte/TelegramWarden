@@ -98,7 +98,7 @@ class SanctionsExecutor:
                 Warn.expires_at > now,
             )
         )
-        active_warns_count = count_res.scalar() or 1
+        active_warns_count = count_res.scalar_one()
 
         # 3. Check if warn limit is exceeded
         if active_warns_count >= chat_db.warn_limit:
@@ -156,19 +156,24 @@ class SanctionsExecutor:
                 permissions=MUTE_PERMISSIONS,
                 until_date=until_date,
             )
-            user_db.is_muted = True
-            user_db.muted_until = until_date
-            await session.flush()
+        except Exception as err:
+            logger.error(f"Failed to mute user {user_db.telegram_id}: {err}")
+            return False
 
+        user_db.is_muted = True
+        user_db.muted_until = until_date
+        await session.flush()
+
+        # Notification failure must not report the mute itself as failed
+        try:
             name = user_db.first_name or f"User {user_db.telegram_id}"
             await bot.send_message(
                 chat_id=chat_id,
                 text=f"Пользователь {name} ограничен в отправке сообщений на {duration_minutes} минут. Причина: {reason}",
             )
-            return True
-        except Exception as err:
-            logger.error(f"Failed to mute user {user_db.telegram_id}: {err}")
-            return False
+        except Exception as notify_err:
+            logger.debug(f"Failed to send mute notification: {notify_err}")
+        return True
 
     @classmethod
     async def ban_user(
@@ -187,17 +192,21 @@ class SanctionsExecutor:
                 user_id=user_db.telegram_id,
                 revoke_messages=revoke_messages,
             )
-            user_db.is_banned = True
-            user_db.ban_reason = reason
-            user_db.banned_at = datetime.now(timezone.utc)
-            await session.flush()
+        except Exception as err:
+            logger.error(f"Failed to ban user {user_db.telegram_id}: {err}")
+            return False
 
+        user_db.is_banned = True
+        user_db.ban_reason = reason
+        user_db.banned_at = datetime.now(timezone.utc)
+        await session.flush()
+
+        try:
             name = user_db.first_name or f"User {user_db.telegram_id}"
             await bot.send_message(
                 chat_id=chat_id,
                 text=f"Пользователь {name} заблокирован. Причина: {reason}",
             )
-            return True
-        except Exception as err:
-            logger.error(f"Failed to ban user {user_db.telegram_id}: {err}")
-            return False
+        except Exception as notify_err:
+            logger.debug(f"Failed to send ban notification: {notify_err}")
+        return True
