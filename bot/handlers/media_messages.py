@@ -21,6 +21,7 @@ from core.logger import logger
 from models import AuditLog, Chat, User
 from services.ai.schema import SuggestedAction, ViolationCategory
 from services.media.pipeline import MediaModerationPipeline
+from services.moderation.night_mode import is_night_mode_active
 
 router = Router(name="media_moderation")
 
@@ -137,6 +138,29 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
 
     user_name = message.from_user.full_name
     preview = f"[{str(media_type).upper()}] {verdict.reason}"
+
+    # Night mode: delete and log for review, defer punitive sanctions
+    # (known spam pHash fingerprints stay enforced — they are deterministic)
+    if is_night_mode_active(chat_db) and verdict.category != ViolationCategory.ADULT_NSFW:
+        logger.info(f"Night mode active in chat {chat_id}: media sanction deferred for user {user_id}")
+        audit_entry = AuditLog(
+            chat_id=chat_id,
+            user_id=user_db.id,
+            action_type="night_mode_review",
+            category=cat_key,
+            reason=f"[Ночной режим] {verdict.reason}",
+            confidence=verdict.confidence,
+            raw_message_snippet=preview[:400],
+        )
+        session.add(audit_entry)
+        await session.flush()
+        await send_admin_review_card(
+            bot=message.bot, chat_db=chat_db, user_name=user_name, user_id=user_id,
+            message_preview=preview, category=cat_key, confidence=verdict.confidence,
+            reason=f"{verdict.reason} (ночной режим — санкция отложена)",
+            audit_entry_id=audit_entry.id,
+        )
+        return
 
     # 5. Delete offending message in all enforcement paths
     await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)

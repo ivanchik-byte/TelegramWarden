@@ -15,6 +15,7 @@ from services.ai.client import ai_dispatcher
 from services.ai.normalizer import TextSanitizer
 from services.ai.risk_scorer import RiskScorer
 from services.ai.schema import SuggestedAction, ViolationCategory
+from services.moderation.night_mode import is_night_mode_active
 
 router = Router(name="text_moderation")
 
@@ -117,6 +118,36 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     is_severe_contraband = (verdict.category == ViolationCategory.ILLEGAL_CONTRABAND)
 
     logger.info(f"AI violation flagged in chat {chat_id} by user {user_id}: {cat_key} ({verdict.confidence}%), mode={mod_mode}, custom_action={custom_action}")
+
+    # Night mode: delete and log for review, defer punitive sanctions
+    if is_night_mode_active(chat_db) and not is_severe_contraband:
+        logger.info(f"Night mode active in chat {chat_id}: sanction deferred for user {user_id}")
+        await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
+
+        audit_entry = AuditLog(
+            chat_id=chat_id,
+            user_id=user_db.id,
+            action_type="night_mode_review",
+            category=verdict.category.value,
+            reason=f"[Ночной режим] {verdict.reason}",
+            confidence=verdict.confidence,
+            raw_message_snippet=sanitized.clean_text[:400],
+        )
+        session.add(audit_entry)
+        await session.flush()
+
+        await send_admin_review_card(
+            bot=message.bot,
+            chat_db=chat_db,
+            user_name=message.from_user.full_name if message.from_user else f"ID {user_id}",
+            user_id=user_id,
+            message_preview=sanitized.clean_text,
+            category=verdict.category.value,
+            confidence=verdict.confidence,
+            reason=f"{verdict.reason} (ночной режим — санкция отложена)",
+            audit_entry_id=audit_entry.id,
+        )
+        return
 
     # Delete offending message
     await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
