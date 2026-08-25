@@ -26,6 +26,7 @@ from core.config import settings
 from core.database import init_db, close_db
 from core.logger import logger
 from core.redis_client import redis_manager
+from services.moderation.night_digest import run_night_digest_loop
 
 
 async def run_fastapi_server() -> None:
@@ -94,10 +95,11 @@ async def main() -> None:
 
     try:
         await bot.delete_webhook(drop_pending_updates=True)
-        # Run Bot Polling and FastAPI Server concurrently
+        # Run Bot Polling, FastAPI Server and the night digest scheduler concurrently
         await asyncio.gather(
             dp.start_polling(bot),
             run_fastapi_server(),
+            run_night_digest_loop(bot),
         )
     finally:
         logger.info("Shutting down TelegramWarden...")

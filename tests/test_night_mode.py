@@ -107,3 +107,13 @@ def test_unknown_timezone_falls_back_to_utc_semantics():
         mock_dt.side_effect = datetime
         status = get_night_mode_status(chat)
         assert status.is_active is True
+
+
+def test_get_night_mode_status_reports_day_after_window():
+    """Digest scheduler relies on status.is_active flipping to False after the window."""
+    chat = make_chat(night_mode_start="00:00", night_mode_end="01:00")
+    with patch(
+        "services.moderation.night_mode._now_in_chat_timezone",
+        return_value=datetime(2026, 8, 25, 2, 0),
+    ):
+        assert get_night_mode_status(chat).is_active is False

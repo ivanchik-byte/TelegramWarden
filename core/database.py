@@ -69,6 +69,8 @@ async def init_db() -> None:
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS media_ocr_filter_enabled BOOLEAN DEFAULT TRUE",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS warn_expiration_days INTEGER DEFAULT 7",
             "ALTER TABLE chats ADD COLUMN IF NOT EXISTS night_mode_timezone VARCHAR(64) DEFAULT 'UTC'",
+            # Unique per-chat users; skipped gracefully when legacy duplicates exist
+            "DO $$ BEGIN ALTER TABLE users ADD CONSTRAINT uq_users_chat_telegram UNIQUE (chat_id, telegram_id); EXCEPTION WHEN duplicate_object THEN NULL; WHEN OTHERS THEN NULL; END $$;",
         ]
         for sql in migrations:
             try:
