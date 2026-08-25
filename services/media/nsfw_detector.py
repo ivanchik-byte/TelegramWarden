@@ -37,34 +37,46 @@ class NSFWDetector:
     def _download_model_if_needed(self) -> None:
         """Automatically download Yahoo Open-NSFW ONNX weights if not present.
 
-        When NSFW_MODEL_SHA256 is configured the downloaded artifact is verified
-        against it; a mismatch aborts usage of the file (supply-chain guard).
+        A SHA-256 pin (NSFW_MODEL_SHA256) is MANDATORY for downloads: an
+        unverified model file is a supply-chain code-execution vector. Existing
+        locally-provisioned files keep working without the pin.
         """
         if self.model_path.exists() and self.model_path.stat().st_size > 1_000_000:
+            return
+
+        expected_sha = settings.NSFW_MODEL_SHA256
+        if not expected_sha:
+            logger.error(
+                "Refusing to download NSFW model without NSFW_MODEL_SHA256. "
+                f"Provision the model manually at {self.model_path} or pin its checksum."
+            )
+            self._warn_unavailable()
+            self._is_initialized = True
             return
 
         import hashlib
         import urllib.request
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         url = "https://huggingface.co/bluefoxcreation/open-nsfw/resolve/main/open-nsfw.onnx"
+        MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024
         logger.info(f"Downloading OpenNSFW ONNX weights from {url}...")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=40) as resp:
-                content = resp.read()
-                if len(content) > 1_000_000:
-                    expected_sha = settings.NSFW_MODEL_SHA256
-                    if expected_sha:
-                        actual_sha = hashlib.sha256(content).hexdigest()
-                        if actual_sha.lower() != expected_sha.lower():
-                            logger.error(
-                                f"OpenNSFW model checksum mismatch: expected {expected_sha}, got {actual_sha}. "
-                                "Refusing to save unverified model."
-                            )
-                            return
-                    with open(self.model_path, "wb") as f:
-                        f.write(content)
-                    logger.info(f"Downloaded OpenNSFW ONNX weights ({len(content)} bytes)")
+                content = resp.read(MAX_DOWNLOAD_BYTES + 1)
+                if len(content) > MAX_DOWNLOAD_BYTES:
+                    logger.error("OpenNSFW download exceeds size cap — aborting.")
+                    return
+                actual_sha = hashlib.sha256(content).hexdigest()
+                if actual_sha.lower() != expected_sha.lower():
+                    logger.error(
+                        f"OpenNSFW model checksum mismatch: expected {expected_sha}, got {actual_sha}. "
+                        "Refusing to save unverified model."
+                    )
+                    return
+                with open(self.model_path, "wb") as f:
+                    f.write(content)
+                logger.info(f"Downloaded OpenNSFW ONNX weights ({len(content)} bytes, checksum verified)")
         except Exception as err:
             logger.warning(f"Failed to auto-download OpenNSFW model: {err}")
 

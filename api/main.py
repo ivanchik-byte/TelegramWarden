@@ -101,6 +101,7 @@ async def scan_text_endpoint(
     # into the prompt: it would be a direct prompt-injection vector.
     verdict = await ai_dispatcher.analyze_message(
         message_text=sanitized.clean_text,
+        cache_user_id=user.id,
     )
     return {
         "is_violation": verdict.is_violation,

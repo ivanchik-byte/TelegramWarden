@@ -84,6 +84,8 @@ async def moderate_text_content(
     verdict = await ai_dispatcher.analyze_message(
         message_text=sanitized.clean_text,
         user_info=user_context,
+        cache_chat_id=chat_id,
+        cache_user_id=user_id,
     )
 
     if not verdict.is_violation:

@@ -133,10 +133,17 @@ class AIClientDispatcher:
         message_text: str,
         user_info: Optional[str] = None,
         chat_context: Optional[list[str]] = None,
+        cache_chat_id: Optional[int] = None,
+        cache_user_id: Optional[int] = None,
     ) -> AIModerationVerdict:
-        """Analyze message intent and return structured moderation verdict."""
-        # Identical payloads (copy-paste raid spam) cost one call, not N
-        cache_key = hashlib.sha256(message_text.encode("utf-8")).hexdigest()
+        """Analyze message intent and return structured moderation verdict.
+
+        The verdict cache is scoped by chat and user: identical text quoted by
+        a different member or posted in another chat must be judged on its own
+        context, not inherit someone else's ban verdict.
+        """
+        scope = f"{cache_chat_id or 0}:{cache_user_id or 0}:"
+        cache_key = hashlib.sha256(f"{scope}{message_text}".encode("utf-8")).hexdigest()
         cached = self._cache.get(cache_key)
         if cached and time.monotonic() - cached[0] < self.CACHE_TTL_SECONDS:
             return cached[1]

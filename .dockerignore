@@ -1,0 +1,31 @@
+# Secrets and local configuration — NEVER bake into the image
+.env
+.env.*
+!.env.example
+
+# Version control and CI
+.git
+.github
+.gitignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Local runtime data
+logs/
+models_cache/
+archives/
+
+# Docs and reports not needed at runtime
+docs/
+report.md
+README.md
+INSTALL.md
+LICENSE

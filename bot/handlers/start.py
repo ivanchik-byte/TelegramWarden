@@ -503,6 +503,7 @@ async def handle_private_text_scan(message: Message) -> None:
     verdict = await ai_dispatcher.analyze_message(
         message_text=sanitized.clean_text,
         user_info=f"Private scan by user {message.from_user.id}",
+        cache_user_id=message.from_user.id if message.from_user else None,
     )
 
     if verdict.is_violation:

@@ -81,6 +81,8 @@ async def handle_edited_message(message: Message, session: AsyncSession) -> None
     verdict = await ai_dispatcher.analyze_message(
         message_text=sanitized.clean_text,
         user_info=f"Edited message by User {user_id}",
+        cache_chat_id=chat_id,
+        cache_user_id=user_id,
     )
 
     if not verdict.is_violation:

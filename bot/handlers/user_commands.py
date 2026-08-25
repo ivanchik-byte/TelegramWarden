@@ -330,6 +330,8 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
         verdict = await ai_dispatcher.analyze_message(
             message_text=sanitized.clean_text,
             user_info=f"Reported message from {target_user.id} in {chat_id}",
+            cache_chat_id=chat_id,
+            cache_user_id=target_user.id,
         )
 
         if verdict.is_violation:
