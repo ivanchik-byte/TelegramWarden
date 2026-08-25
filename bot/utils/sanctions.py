@@ -142,8 +142,8 @@ class SanctionsExecutor:
             if chat_db.warn_punishment == "ban":
                 await cls.ban_user(bot, session, chat_db.chat_id, user_db, reason="Превышен лимит предупреждений")
             else:
-                # Default: Mute for configured duration
-                duration = chat_db.warn_mute_duration_minutes
+                # Default: Mute for configured duration (guard NULL column)
+                duration = chat_db.warn_mute_duration_minutes or 1440
                 await cls.mute_user(
                     bot=bot,
                     session=session,

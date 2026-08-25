@@ -148,8 +148,9 @@ class RiskScorer:
                 trigger_reasons=[],
             )
 
-        # If any significant risk is accumulated, trigger AI
-        should_call_ai = risk_score >= 25 or is_newcomer
+        # Any significant accumulated risk triggers AI. (is_newcomer is not
+        # checked here: it already contributes +30 to the score.)
+        should_call_ai = risk_score >= 25
 
         return RiskScoringResult(
             should_call_ai=should_call_ai,

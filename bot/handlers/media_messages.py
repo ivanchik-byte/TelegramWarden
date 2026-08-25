@@ -163,10 +163,12 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         logger.warning(f"Failed to download media for inspection: {download_err}")
         return
 
-    # 4. Caption text follows the exact same moderation policy as plain text
+    # 4. Caption text follows the exact same moderation policy as plain text.
+    # A caption hit does NOT skip the image scan: "порно + спам-каптион" must
+    # still reach the NSFW pipeline and its repeat-offense escalation.
     caption_text = message.caption or ""
     if caption_text:
-        handled = await moderate_text_content(
+        await moderate_text_content(
             bot=message.bot,
             session=session,
             message=message,
@@ -174,8 +176,6 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
             user_db=user_db,
             raw_text=caption_text,
         )
-        if handled:
-            return  # caption violation already sanctioned; media inspected separately
 
     # 5. Run local media pipeline honoring per-chat scanner toggles.
     # Animations (MP4/GIF) and video stickers (webm) need keyframe sampling,

@@ -48,3 +48,7 @@ class AIModerationVerdict(BaseModel):
     suggested_action: SuggestedAction = Field(
         description="Recommended enforcement action based on severity."
     )
+    fail_open: bool = Field(
+        default=False,
+        description="True only for the synthetic verdict emitted when every provider failed.",
+    )

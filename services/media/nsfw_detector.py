@@ -153,8 +153,7 @@ class NSFWDetector:
             raw_scores = outputs[0]
             if len(raw_scores.shape) == 2 and raw_scores.shape[1] >= 2:
                 nsfw_prob = float(raw_scores[0][1])
-                # Threshold at 70% confidence for adult material
-                is_nsfw = nsfw_prob > 0.70
+                is_nsfw = nsfw_prob > settings.NSFW_THRESHOLD
                 return NSFWDetectionResult(
                     is_nsfw=is_nsfw,
                     confidence=round(nsfw_prob * 100, 2),

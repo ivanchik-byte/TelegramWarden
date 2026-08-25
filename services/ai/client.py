@@ -52,6 +52,11 @@ def _coerce_bool(value, default: bool = False) -> bool:
 # BELOW the default review threshold (50%): a genuinely unsure model must
 # not be clamped up into automatic sanctions — unsure means pass to review
 # only if the model itself crossed 50.
+#
+# DESIGN DECISION (do not "fix"): in strict_confidence mode toxic_insult and
+# commercial_ad can never be confidence-banned (ceiling 84 < ban threshold).
+# Intentional: bans for those categories require the AI-Judge's explicit
+# suggested_action or a human admin, never raw model certainty alone.
 CATEGORY_CONFIDENCE_BANDS = {
     "toxic_insult": (5.0, 84.0),
     "commercial_ad": (5.0, 84.0),
@@ -200,7 +205,7 @@ class AIClientDispatcher:
 
         # Fail-open verdicts must never be cached: one provider hiccup would
         # otherwise wave identical spam through every chat for the whole TTL.
-        if verdict.reason != FAIL_OPEN_REASON:
+        if not verdict.fail_open:
             self._cache[cache_key] = (time.monotonic(), verdict)
             if len(self._cache) > self.CACHE_MAX_ENTRIES:
                 # Drop the oldest quarter instead of scanning for exact LRU order
@@ -252,6 +257,7 @@ class AIClientDispatcher:
             confidence=0.0,
             reason=FAIL_OPEN_REASON,
             suggested_action=SuggestedAction.PASS_MESSAGE,
+            fail_open=True,
         )
 
 

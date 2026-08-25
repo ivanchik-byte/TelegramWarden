@@ -1,7 +1,7 @@
 """Shared moderation notification cards for group notices and admin review."""
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError
+
 from core.logger import logger
 from bot.keyboards.admin_logs import get_admin_log_keyboard, get_group_moderation_keyboard
 
@@ -69,8 +69,10 @@ async def send_admin_review_card(
             chat_id=target,
             text=admin_card_text,
             reply_markup=get_admin_log_keyboard(
-                chat_db.chat_id, user_id, audit_entry_id, is_ban_action=is_ban_action
+                chat_db.chat_id, user_id, audit_entry.id, is_ban_action=is_ban_action
             ),
         )
-    except TelegramAPIError as err:
+    except Exception as err:
+        # Broad catch: a card failure must never bubble up and roll back the
+        # transaction — sanctions are already applied in Telegram by now
         logger.warning(f"Failed to send admin review card to {target}: {err}")

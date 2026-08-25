@@ -10,11 +10,13 @@ def test_default_settings_instantiation():
         POSTGRES_USER="test_user",
         POSTGRES_PASSWORD="test_password",
         POSTGRES_DB="test_db",
+        _env_file=None,  # defaults, not the developer's local .env
     )
 
     assert cfg.BOT_TOKEN.startswith("123456:")
     assert cfg.POSTGRES_USER == "test_user"
-    assert cfg.WARN_EXPIRATION_DAYS == 14
+    # Aligned with Chat.warn_expiration_days (single source of truth)
+    assert cfg.WARN_EXPIRATION_DAYS == 7
     assert cfg.LOGS_RETENTION_DAYS == 30
     assert "postgresql+asyncpg://" in cfg.async_database_url
     assert "redis://" in cfg.redis_connection_url

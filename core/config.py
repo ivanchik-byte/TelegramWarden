@@ -105,7 +105,9 @@ class Settings(BaseSettings):
 
 
     # Data Retention Policies (in days/hours)
-    WARN_EXPIRATION_DAYS: int = Field(default=14)
+    # Fallback only: per-chat Chat.warn_expiration_days is the single source
+    # of truth applied by SanctionsExecutor.
+    WARN_EXPIRATION_DAYS: int = Field(default=7)
     LOGS_RETENTION_DAYS: int = Field(default=30)
     MESSAGE_CACHE_HOURS: int = Field(default=24)
 
@@ -114,6 +116,7 @@ class Settings(BaseSettings):
 
     # Optional SHA-256 pin for the auto-downloaded OpenNSFW ONNX model
     NSFW_MODEL_SHA256: str = Field(default="")
+    NSFW_THRESHOLD: float = Field(default=0.70)
 
 
 # Singleton instance
