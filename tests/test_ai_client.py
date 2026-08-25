@@ -242,6 +242,7 @@ async def test_fail_open_verdict_is_not_cached():
     # First call: both providers fail -> fail-open clean verdict
     failing = AsyncMock(side_effect=Exception("provider down"))
     dispatcher.primary_client.chat.completions.create = failing
+    dispatcher.fallback_client = None
 
     first = await dispatcher.analyze_message("одинаковый спам")
     assert first.is_violation is False
