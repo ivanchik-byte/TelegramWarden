@@ -1,5 +1,7 @@
 """Unit tests for AIClientDispatcher and structured JSON output validation."""
 
+import json
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from services.ai.client import AIClientDispatcher
@@ -72,7 +74,7 @@ async def test_ai_dispatcher_fallback_on_primary_failure():
 
     assert verdict.is_violation is True
     assert verdict.category == ViolationCategory.COMMERCIAL_AD
-    assert verdict.confidence == 92.0
+    assert verdict.confidence == 84.0  # commercial_ad ceiling clamp
     assert verdict.suggested_action == SuggestedAction.WARN
 
 
@@ -91,3 +93,99 @@ async def test_ai_dispatcher_fail_open_on_total_failure():
     assert verdict.category == ViolationCategory.CLEAN
     assert verdict.confidence == 0.0
     assert verdict.suggested_action == SuggestedAction.PASS_MESSAGE
+
+
+def _make_verdict_response(payload: dict) -> MagicMock:
+    mock_response = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = json.dumps(payload)
+    mock_response.choices = [mock_choice]
+    return mock_response
+
+
+@pytest.mark.asyncio
+async def test_calibration_extreme_confidence_is_clamped_to_category_band():
+    """LLM habit extremes (99%) must be clamped: toxic/commercial stay below ban threshold."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "toxic_insult",
+            "confidence": 99.0,
+            "reason": "Оскорбление участника",
+            "suggested_action": "warn",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("ты урод")
+
+    assert verdict.category == ViolationCategory.TOXIC_INSULT
+    assert verdict.confidence == 84.0
+    # Confidence-based ban tier (>=85 by default) is unreachable for warn-tier categories.
+    assert verdict.confidence < 85.0
+
+
+@pytest.mark.asyncio
+async def test_calibration_clean_high_confidence_stays_low_threat():
+    """A clean verdict with high model certainty maps to low threat risk without inversion."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": False,
+            "category": "clean",
+            "confidence": 87.0,
+            "reason": "Обычное сообщение",
+            "suggested_action": "pass_message",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("привет, как дела?")
+
+    assert verdict.is_violation is False
+    assert verdict.confidence <= 15.0
+    assert verdict.suggested_action == SuggestedAction.PASS_MESSAGE
+
+
+@pytest.mark.asyncio
+async def test_calibration_mid_range_values_pass_through_unchanged():
+    """Values inside the category band keep the model's relative granularity."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "crypto_scam",
+            "confidence": 62.0,
+            "reason": "Подозрительное предложение заработка",
+            "suggested_action": "delete_message",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("кто хочет поднять бабок?")
+
+    assert verdict.category == ViolationCategory.CRYPTO_SCAM
+    assert verdict.confidence == 62.0
+
+
+@pytest.mark.asyncio
+async def test_calibration_unsure_contraband_is_not_clamped_up():
+    """A low-confidence contraband guess must never be inflated into the ban tier."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "illegal_contraband",
+            "confidence": 30.0,
+            "reason": "Похоже на обсуждение запрещённых веществ, но контекст неясен",
+            "suggested_action": "delete_message",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("где взять то что обсуждали?")
+
+    assert verdict.category == ViolationCategory.ILLEGAL_CONTRABAND
+    assert verdict.confidence == 30.0
+    assert verdict.confidence < 85.0

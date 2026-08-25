@@ -17,6 +17,22 @@ from services.ai.schema import (
 
 JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
 
+# Per-category confidence bands (floor, ceiling). Ceilings for warn/mute-tier
+# categories stay below the default ban threshold (85%) so that raw LLM
+# overconfidence alone can never trigger a confidence-based ban.
+CATEGORY_CONFIDENCE_BANDS = {
+    "toxic_insult": (5.0, 84.0),
+    "commercial_ad": (5.0, 84.0),
+    "flood_spam": (5.0, 94.0),
+    "other_violation": (5.0, 94.0),
+    "crypto_scam": (50.0, 99.0),
+    "phishing": (50.0, 99.0),
+    # Low floor: an unsure LLM must not be clamped UP into the ban tier.
+    # Severe-contraband banning is driven by the category flag, not confidence.
+    "illegal_contraband": (10.0, 99.0),
+    "adult_nsfw": (60.0, 99.0),
+}
+
 
 class AIClientDispatcher:
     """Dispatches moderation queries to Primary (DeepSeek) or Fallback (Groq/OpenAI) LLM."""
@@ -52,20 +68,21 @@ class AIClientDispatcher:
 
         # Normalize Confidence to Threat Risk (0% = Safe Green, 100% = Danger Red)
         is_violation = bool(parsed_dict.get("is_violation", False))
-        category = str(parsed_dict.get("category", "clean")).lower()
+        category_key = str(parsed_dict.get("category", "clean")).lower()
         conf = float(parsed_dict.get("confidence", 0.0))
 
-        if not is_violation or category == "clean":
+        if not is_violation or category_key == "clean":
+            # Threat risk of a clean message is always low; clamp instead of
+            # inverting so the scale stays monotonic and predictable.
             parsed_dict["is_violation"] = False
             parsed_dict["category"] = "clean"
-            # If LLM returned 99% (meaning 99% clean), invert to 1% Threat Risk
-            if conf > 50.0:
-                parsed_dict["confidence"] = max(1.0, round(100.0 - conf, 1))
-            elif conf <= 0.0:
-                parsed_dict["confidence"] = 1.0
-            else:
-                parsed_dict["confidence"] = min(conf, 15.0)
+            parsed_dict["confidence"] = min(max(conf, 1.0), 15.0)
             parsed_dict["suggested_action"] = "pass_message"
+        else:
+            # Clamp violation confidence into its category band: preserves the
+            # model's relative certainty while preventing habitual extremes (1%/99%).
+            floor, ceiling = CATEGORY_CONFIDENCE_BANDS.get(category_key, (5.0, 94.0))
+            parsed_dict["confidence"] = round(min(max(conf, floor), ceiling), 1)
 
         return AIModerationVerdict.model_validate(parsed_dict)
 
