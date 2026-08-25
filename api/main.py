@@ -89,9 +89,10 @@ async def scan_text_endpoint(
         )
 
     sanitized = TextSanitizer.sanitize(payload.text)
+    # payload.user_info is user-controlled and deliberately NOT interpolated
+    # into the prompt: it would be a direct prompt-injection vector.
     verdict = await ai_dispatcher.analyze_message(
         message_text=sanitized.clean_text,
-        user_info=payload.user_info,
     )
     return {
         "is_violation": verdict.is_violation,
