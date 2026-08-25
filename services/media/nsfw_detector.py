@@ -20,6 +20,9 @@ class NSFWDetectionResult(NamedTuple):
     is_nsfw: bool
     confidence: float
     detected_classes: list[str]
+    # False when the model could not run at all: the caller may choose a
+    # stricter policy (e.g. fail-closed for newcomers) instead of trusting SAFE
+    model_available: bool = True
 
 
 class NSFWDetector:
@@ -65,6 +68,15 @@ class NSFWDetector:
         except Exception as err:
             logger.warning(f"Failed to auto-download OpenNSFW model: {err}")
 
+    def _warn_unavailable(self) -> None:
+        """Log a prominent one-time warning when moderation is degraded."""
+        if not self._unavailable_warned:
+            logger.warning(
+                "NSFW MODERATION IS INACTIVE: media passes unscanned. "
+                "Fix the model file/configuration and restart the bot."
+            )
+            self._unavailable_warned = True
+
     def _init_session(self) -> bool:
         """Initialize the ONNX Runtime Inference Session on CPU."""
         if self._is_initialized:
@@ -74,12 +86,7 @@ class NSFWDetector:
 
         if not self.model_path.exists() or self.model_path.stat().st_size < 1_000_000:
             logger.warning(f"NSFW ONNX model not found at {self.model_path}. Will use safe fallback.")
-            if not self._unavailable_warned:
-                logger.warning(
-                    "NSFW MODERATION IS INACTIVE: images pass unscanned. "
-                    "Fix the model file and restart the bot."
-                )
-                self._unavailable_warned = True
+            self._warn_unavailable()
             self._is_initialized = True
             return False
 
@@ -99,9 +106,7 @@ class NSFWDetector:
             return True
         except Exception as err:
             logger.error(f"Failed to load NSFW ONNX model: {err}")
-            if not self._unavailable_warned:
-                logger.warning("NSFW MODERATION IS INACTIVE after load failure — do not ignore this.")
-                self._unavailable_warned = True
+            self._warn_unavailable()
             self._is_initialized = True
             return False
 
@@ -124,7 +129,8 @@ class NSFWDetector:
     def _sync_detect(self, pil_img: Image.Image) -> NSFWDetectionResult:
         """Execute synchronous model inference on CPU."""
         if not self._init_session() or self._session is None:
-            return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[])
+            self._warn_unavailable()
+            return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[], model_available=False)
 
         try:
             tensor = self._preprocess_image(pil_img)

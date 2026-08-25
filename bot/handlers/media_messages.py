@@ -22,7 +22,7 @@ from bot.utils.text_moderation import moderate_text_content
 from core.logger import logger
 from models import AuditLog, Chat, User
 from services.ai.schema import SuggestedAction, ViolationCategory
-from services.media.pipeline import MediaModerationPipeline
+from services.media.pipeline import MediaModerationPipeline, sniff_media_kind
 from services.moderation.night_mode import is_night_mode_active
 
 router = Router(name="media_moderation")
@@ -166,6 +166,33 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     )
 
     if not verdict.is_violation:
+        # Fail-closed for newcomers: when NSFW could not actually run (model
+        # missing, inference failure) their unscanable media is held for admin
+        # review instead of silently passing. Newcomers are the primary
+        # source of porn raids; the cost of a false hold is one admin click.
+        is_newcomer = user_db.message_count < 5 or (
+            (datetime.now(timezone.utc) - user_db.first_seen_at).days < 3
+        )
+        if is_newcomer and not low_res_scan and not verdict.nsfw_checked:
+            logger.warning(f"NSFW scan unavailable for newcomer media in {chat_id}, user {user_id} — holding for review")
+            await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
+            audit_entry = AuditLog(
+                chat_id=chat_id,
+                user_id=user_db.id,
+                action_type="review_required",
+                category=ViolationCategory.ADULT_NSFW.value,
+                reason="[Fail-closed] Медиа новичка не удалось просканировать — проверьте вручную",
+                confidence=0.0,
+                raw_message_snippet=f"[{str(media_type).upper()}] unscanned",
+            )
+            session.add(audit_entry)
+            await session.flush()
+            await send_admin_review_card(
+                bot=message.bot, chat_db=chat_db, user_name=message.from_user.full_name, user_id=user_id,
+                message_preview=f"[{media_type}] NSFW-скан недоступен", category="adult_nsfw",
+                confidence=0.0, reason="Медиа новичка удалено: сканер был недоступен",
+                audit_entry_id=audit_entry.id,
+            )
         return
 
     cat_key = verdict.category.value
@@ -349,11 +376,10 @@ async def handle_document_message(message: Message, session: AsyncSession) -> No
         if handled:
             return
 
-    # Only scannable visual payloads go through the local pipeline
-    is_scannable = mime.startswith("image/") or mime.startswith("video/")
-    if not is_scannable or file_size > MAX_ORIGINAL_SCAN_BYTES:
-        if file_size > MAX_ORIGINAL_SCAN_BYTES:
-            logger.info(f"Document {document.file_name!r} ({file_size} bytes) exceeds scan limit in {chat_id}")
+    # Download first, then trust the bytes — declared MIME is attacker-
+    # controlled (application/octet-stream is a classic NSFW disguise)
+    if file_size > MAX_ORIGINAL_SCAN_BYTES:
+        logger.info(f"Document {document.file_name!r} ({file_size} bytes) exceeds scan limit in {chat_id}")
         return
 
     try:
@@ -364,9 +390,16 @@ async def handle_document_message(message: Message, session: AsyncSession) -> No
         logger.warning(f"Failed to download document for inspection: {download_err}")
         return
 
+    # Magic bytes decide; declared MIME is only a fallback hint
+    sniffed = sniff_media_kind(media_bytes)
+    if sniffed is None and mime:
+        sniffed = {"image": "photo", "video": "video"}.get(mime.split("/")[0])
+    if sniffed not in ("photo", "video", "animation"):
+        return  # genuinely not scannable visual content
+
     verdict = await MediaModerationPipeline.process_media(
         media_bytes=media_bytes,
-        media_type="video" if mime.startswith("video/") else "photo",
+        media_type="video" if sniffed in ("video", "animation") else "photo",
         scan_nsfw=chat_db.media_nsfw_filter_enabled,
         scan_qr=chat_db.media_qr_filter_enabled,
         scan_ocr=chat_db.media_ocr_filter_enabled,
