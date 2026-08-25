@@ -69,6 +69,21 @@ class SanctionsExecutor:
         return user
 
     @classmethod
+    async def lock_user(cls, session: AsyncSession, user_db: User) -> None:
+        """Take a row lock on the user and refresh ORM state.
+
+        with_for_update() alone returns the stale identity-mapped object:
+        without populate_existing concurrent counter updates are lost.
+        Call before read-modify-write increments (message_count, warns).
+        """
+        await session.execute(
+            select(User)
+            .where(User.id == user_db.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    @classmethod
     async def apply_warn(
         cls,
         bot: Bot,
@@ -82,11 +97,9 @@ class SanctionsExecutor:
         """Issue a warning and apply punishment if warn limit is reached."""
         now = datetime.now(timezone.utc)
 
-        # Serialize concurrent sanctions on the same user: two simultaneous
-        # violations must not both read the pre-warn count and skip escalation
-        await session.execute(
-            select(User).where(User.id == user_db.id).with_for_update()
-        )
+        # Serialize concurrent sanctions on the same user and re-read fresh
+        # counter values before mutating them
+        await cls.lock_user(session, user_db)
 
         # 1. Create Warn entry with chat-configured expiration
         exp_days = getattr(chat_db, 'warn_expiration_days', 7) or 7

@@ -62,12 +62,17 @@ def _select_media_target(message: Message) -> tuple[str, object, bool]:
 
 
 async def _count_prior_nsfw_offenses(session: AsyncSession, user_db: User) -> int:
-    """Count previous confirmed NSFW detections for this user in this chat."""
+    """Count previous *sanctioned* NSFW detections for this user in this chat.
+
+    Only real sanctions escalate: fail-closed review holds (scanner down)
+    must never count toward an automatic ban of an innocent user.
+    """
     result = await session.execute(
         select(func.count(AuditLog.id)).where(
             AuditLog.user_id == user_db.id,
             AuditLog.chat_id == user_db.chat_id,
             AuditLog.category == ViolationCategory.ADULT_NSFW.value,
+            AuditLog.action_type.in_(("warn", "ban_user")),
         )
     )
     return result.scalar() or 0
@@ -101,6 +106,7 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         username=message.from_user.username,
         first_name=message.from_user.first_name,
     )
+    await SanctionsExecutor.lock_user(session, user_db)
     user_db.message_count += 1
 
     # 3. Newbie media lock: newcomers cannot post media for N hours
@@ -382,6 +388,7 @@ async def handle_document_message(message: Message, session: AsyncSession) -> No
         username=message.from_user.username,
         first_name=message.from_user.first_name,
     )
+    await SanctionsExecutor.lock_user(session, user_db)
     user_db.message_count += 1
 
     document = message.document
