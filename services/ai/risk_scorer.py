@@ -13,6 +13,8 @@ HIGH_RISK_TRIGGER_KEYWORDS = [
     "ставки", "раздач", "бесплатно", "схема", "мануал", "onlyfans", "18+",
     "цп", "cp", "дп", "csam", "меф", "соли", "закладк", "альфа-пвп", "докс", "деанон", "сват",
     "залив", "кардинг", "дамп", "куки", "логи", "курьер",
+    # collapsed alias: separator-stripped form of "в лс" ("в.л.с." -> "влс")
+    "влс", "вличку",
     "crypt", "invest", "profit", "earn", "income", "free usdt", "giveaway"
 ]
 
@@ -27,7 +29,11 @@ MIN_SAMPLING_CADENCE = 2
 MAX_SAMPLING_CADENCE = 100
 
 # Leetspeak and separator obfuscation ("airdr0p", "З.а.р.а.б.о.т.ок")
-_LEET_TRANSLATION = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s"})
+_LEET_TRANSLATION = str.maketrans({
+    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s",
+    "6": "b", "7": "t", "8": "b", "9": "g",
+    "@": "a", "$": "s",
+})
 _TOKEN_SEPARATORS = re.compile(r"[^\wа-яё]+")
 
 
@@ -65,9 +71,14 @@ class RiskScorer:
         user_days_in_chat: int = 30,
         is_forward: bool = False,
         sampling_rate: float = 0.05,
+        telegram_id: int = 0,
     ) -> RiskScoringResult:
         """Calculate risk score and determine if AI inspection is needed."""
         cadence = cls.cadence_from_rate(sampling_rate)
+        # Per-user phase derived from the stable Telegram ID: without jitter a
+        # spammer could count messages and always strike right after the
+        # inspected slot (9 clean, spam on the N-th).
+        phase = telegram_id % cadence
         risk_score = 0
         trigger_reasons: list[str] = []
 
@@ -123,9 +134,9 @@ class RiskScorer:
             trigger_reasons.append(f"keywords_matched:{','.join(unique_matched[:3])}")
 
         # 7. Zero-risk messages from established users: mostly free pass,
-        #    but every N-th message is inspected deterministically
+        #    but every cadence-th message (jittered per user) is inspected
         if risk_score == 0 and not is_newcomer:
-            if user_message_count > 0 and user_message_count % cadence == 0:
+            if user_message_count > 0 and user_message_count % cadence == phase:
                 return RiskScoringResult(
                     should_call_ai=True,
                     risk_score=10,

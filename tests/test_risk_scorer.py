@@ -25,6 +25,7 @@ def test_scheduled_sampling_fires_on_cadence_for_any_length():
         sanitized=sanitized_long,
         user_message_count=160,
         user_days_in_chat=45,
+        telegram_id=40,  # phase 0 under cadence 20
     )
     assert result_long.should_call_ai is True
     assert "scheduled_sampling_check" in result_long.trigger_reasons
@@ -34,6 +35,7 @@ def test_scheduled_sampling_fires_on_cadence_for_any_length():
         sanitized=sanitized_short,
         user_message_count=40,
         user_days_in_chat=45,
+        telegram_id=40,
     )
     assert result_short.should_call_ai is True
 
@@ -131,3 +133,38 @@ def test_separator_and_leet_obfuscated_keywords_match():
     )
     keyword_reasons = [r for r in score_leet.trigger_reasons if r.startswith("keywords_matched")]
     assert any("airdrop" in r for r in keyword_reasons)
+
+
+def test_sampling_jitter_shifts_phase_per_user():
+    """The inspected slot depends on the stable user ID, not a fixed count."""
+    sanitized = TextSanitizer.sanitize("обычное чистое сообщение")
+
+    # User A: phase 0 -> message #20 is the inspected one
+    a = RiskScorer.evaluate(sanitized, user_message_count=20, user_days_in_chat=45, telegram_id=40)
+    assert a.should_call_ai is True
+
+    # User B: phase 7 -> message #20 passes clean, #27 would be inspected
+    b = RiskScorer.evaluate(sanitized, user_message_count=20, user_days_in_chat=45, telegram_id=47)
+    assert b.should_call_ai is False
+    b27 = RiskScorer.evaluate(sanitized, user_message_count=27, user_days_in_chat=45, telegram_id=47)
+    assert b27.should_call_ai is True
+
+
+def test_collapsed_private_message_alias_matches():
+    """'в.л.с.' de-obfuscates to 'влс', which must match its alias keyword."""
+    sanitized = TextSanitizer.sanitize("Пишите мне в.л.с. по всем вопросам")
+    score_result = RiskScorer.evaluate(
+        sanitized=sanitized,
+        user_message_count=101,
+        user_days_in_chat=60,
+    )
+    keyword_reasons = [r for r in score_result.trigger_reasons if r.startswith("keywords_matched")]
+    assert any("влс" in r or "в лс" in r for r in keyword_reasons)
+
+
+def test_unicode_tag_characters_count_as_invisible():
+    """Unicode tag chars (U+E0000-E007F, hidden Telegram data) must flag risk."""
+    text = "привет\U000E0041\U000E0042скрытая"
+    sanitized = TextSanitizer.sanitize(text)
+    assert sanitized.had_invisible_characters is True
+    assert "\U000e0041" not in sanitized.clean_text

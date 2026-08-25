@@ -22,10 +22,25 @@ class QRScanResult(NamedTuple):
 class QRDetector:
     """Detects and decodes QR codes and Barcodes from in-memory image bytes."""
 
+    _unavailable_warned = False
+
+    @classmethod
+    def _warn_unavailable(cls) -> None:
+        """Log a prominent one-time warning when pyzbar is missing."""
+        if not cls._unavailable_warned:
+            logger.warning(
+                "QR SCANNER IS INACTIVE: libzbar0/pyzbar not available. "
+                "QR-based phishing links in media pass undetected."
+            )
+            cls._unavailable_warned = True
+
     @classmethod
     def scan_image(cls, image_bytes: bytes) -> QRScanResult:
         """Scan image bytes and extract decoded QR contents."""
-        if not image_bytes or _pyzbar_decode is None:
+        if not image_bytes:
+            return QRScanResult(has_qr=False, payloads=[])
+        if _pyzbar_decode is None:
+            cls._warn_unavailable()
             return QRScanResult(has_qr=False, payloads=[])
 
         try:

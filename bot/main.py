@@ -26,6 +26,7 @@ from core.config import settings
 from core.database import init_db, close_db
 from core.logger import logger
 from core.redis_client import redis_manager
+from services.cleaner.scheduler import run_retention_loop
 from services.moderation.night_digest import run_night_digest_loop
 
 
@@ -63,6 +64,8 @@ async def main() -> None:
     # 3. Register Global Middlewares
     dp.update.middleware(DBSessionMiddleware())
     dp.message.middleware(RateLimitMiddleware())
+    # Edited messages are an equal flood vector: rate-limit them identically
+    dp.edited_message.middleware(RateLimitMiddleware())
 
     # 4. Attach Event Routers
     dp.include_router(start_router)
@@ -95,11 +98,12 @@ async def main() -> None:
 
     try:
         await bot.delete_webhook(drop_pending_updates=True)
-        # Run Bot Polling, FastAPI Server and the night digest scheduler concurrently
+        # Run Bot Polling, FastAPI Server and background workers concurrently
         await asyncio.gather(
             dp.start_polling(bot),
             run_fastapi_server(),
             run_night_digest_loop(bot),
+            run_retention_loop(),
         )
     finally:
         logger.info("Shutting down TelegramWarden...")

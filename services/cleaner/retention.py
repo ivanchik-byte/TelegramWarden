@@ -32,8 +32,13 @@ class DataRetentionWorker:
         return expired_count
 
     @classmethod
-    async def purge_and_archive_logs(cls, session: AsyncSession, retention_days: int = 30) -> int:
-        """Archive raw message snippets older than retention period into compressed .json.gz and purge snippets."""
+    async def purge_and_archive_logs(cls, session: AsyncSession, retention_days: int = 30) -> tuple[int, list[dict]]:
+        """Scrub raw message snippets older than the retention period.
+
+        Returns the archived records for the caller to persist AFTER the DB
+        transaction commits — writing the archive before the commit meant a
+        rollback would leave rows alive and get them archived again.
+        """
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
         # Query old logs that still retain raw message text
@@ -45,7 +50,7 @@ class DataRetentionWorker:
         old_logs = result.scalars().all()
 
         if not old_logs:
-            return 0
+            return 0, []
 
         # Build archive payload
         archive_records = []
@@ -63,7 +68,25 @@ class DataRetentionWorker:
                 "is_false_positive": log.is_false_positive,
             })
 
-        # Save to compressed archive file
+        try:
+            # Scrub raw text from database to reclaim storage (committed by caller)
+            for log in old_logs:
+                log.raw_message_snippet = None
+                log.evidence_file_id = None
+
+            await session.flush()
+            return len(archive_records), archive_records
+
+        except Exception as err:
+            logger.error(f"Failed to prepare audit log archival: {err}")
+            return 0, []
+
+    @classmethod
+    def write_archive(cls, archive_records: list[dict]) -> bool:
+        """Append scrubbed records to the compressed archive file."""
+        if not archive_records:
+            return True
+
         now = datetime.now(timezone.utc)
         archive_path = ARCHIVE_DIR / f"audit_archive_{now.year}_{now.month:02d}.json.gz"
         try:
@@ -71,15 +94,7 @@ class DataRetentionWorker:
                 for rec in archive_records:
                     gz_file.write(json.dumps(rec, ensure_ascii=False) + "\n")
             logger.info(f"Archived {len(archive_records)} audit logs into {archive_path}")
-
-            # Scrub raw text from database to reclaim storage
-            for log in old_logs:
-                log.raw_message_snippet = None
-                log.evidence_file_id = None
-
-            await session.flush()
-            return len(archive_records)
-
+            return True
         except Exception as err:
-            logger.error(f"Failed to archive audit logs: {err}")
-            return 0
+            logger.error(f"Failed to write audit archive: {err}")
+            return False

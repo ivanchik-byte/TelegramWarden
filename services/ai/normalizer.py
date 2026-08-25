@@ -46,9 +46,12 @@ CONFUSABLES_MAP = {
 }
 
 
-# Regex for Zero-Width and invisible characters
+# Regex for Zero-Width and invisible characters.
+# Includes Unicode tag characters (U+E0000-E007F) — the classic carrier of
+# hidden links/data in Telegram — and variation selectors (U+FE00-FE0F).
 ZERO_WIDTH_PATTERN = re.compile(
-    r"[\u200B-\u200D\uFEFF\u2060\u200E\u200F\u00AD\u202A-\u202E\u2066-\u2069]"
+    r"[\u200B-\u200D\uFEFF\u2060\u200E\u200F\u00AD\u202A-\u202E\u2066-\u2069"
+    r"\uFE00-\uFE0F\U000E0000-\U000E007F]"
 )
 
 # Regex for Markdown and HTML hidden links

@@ -51,6 +51,7 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
         username=message.from_user.username,
         first_name=message.from_user.first_name,
     )
+    await SanctionsExecutor.lock_user(session, user_db)
     user_db.message_count += 1
 
     # 4. Shared moderation core: sanitize -> risk score -> LLM -> enforce

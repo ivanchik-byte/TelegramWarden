@@ -73,8 +73,11 @@ async def test_purge_and_archive_logs(db_session: AsyncSession):
     old_log.created_at = old_date
     await db_session.commit()
 
-    archived_count = await DataRetentionWorker.purge_and_archive_logs(db_session, retention_days=30)
+    archived_count, records = await DataRetentionWorker.purge_and_archive_logs(db_session, retention_days=30)
     await db_session.commit()
+
+    # Archive is persisted only AFTER the DB commit (rollback safety)
+    assert DataRetentionWorker.write_archive(records) is True
 
     assert archived_count == 1
     refreshed_log = await db_session.get(AuditLog, old_log.id)

@@ -61,6 +61,7 @@ async def handle_edited_message(message: Message, session: AsyncSession) -> None
         user_days_in_chat=days_in_chat,
         is_forward=False,
         sampling_rate=chat_db.ai_sampling_rate,
+        telegram_id=user_id,
     )
 
     triggered = bool(

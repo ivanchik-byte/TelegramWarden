@@ -72,6 +72,7 @@ async def moderate_text_content(
             user_days_in_chat=days_in_chat,
             is_forward=is_forward,
             sampling_rate=chat_db.ai_sampling_rate,
+            telegram_id=user_id,
         )
         should_call_ai = risk_result.should_call_ai
     else:

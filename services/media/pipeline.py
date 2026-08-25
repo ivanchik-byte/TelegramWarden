@@ -120,11 +120,15 @@ class MediaModerationPipeline:
 
         # 3. Inspect Frames — NSFW first across ALL frames, then soft signals,
         # so a QR code on an early frame cannot short-circuit a porn verdict.
-        encoded_frames: list[tuple[Image.Image, bytes]] = []
-        for frame in frames:
-            buffer = io.BytesIO()
-            frame.save(buffer, format="JPEG", quality=85)
-            encoded_frames.append((frame, buffer.getvalue()))
+        def _encode_frames() -> list[tuple[Image.Image, bytes]]:
+            encoded = []
+            for frame in frames:
+                buffer = io.BytesIO()
+                frame.save(buffer, format="JPEG", quality=85)
+                encoded.append((frame, buffer.getvalue()))
+            return encoded
+
+        encoded_frames = await asyncio.to_thread(_encode_frames)
 
         # Videos cannot be hashed from raw container bytes: derive the spam
         # fingerprint from the first decoded frame instead.
@@ -171,7 +175,7 @@ class MediaModerationPipeline:
                 # B. QR Code Scanner: any URL-bearing QR goes to admin review,
                 # never auto-sanctioned (legitimate menus/Wi-Fi/websites exist).
                 if scan_qr:
-                    qr_result = QRDetector.scan_image(frame_bytes)
+                    qr_result = await asyncio.to_thread(QRDetector.scan_image, frame_bytes)
                     if qr_result.has_qr and qr_result.payloads:
                         payload = qr_result.payloads[0]
                         logger.info(f"QR code detected in media: {payload[:60]}")

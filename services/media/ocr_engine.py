@@ -18,19 +18,32 @@ class OCRResult(NamedTuple):
 class OCREngine:
     """Extracts text from images and checks for embedded contact links and spam."""
 
+    _unavailable_warned = False
+
+    @classmethod
+    def _warn_unavailable(cls) -> None:
+        """Log a prominent one-time warning when tesseract is missing."""
+        if not cls._unavailable_warned:
+            logger.warning(
+                "OCR SCANNER IS INACTIVE: pytesseract/tesseract binary not available. "
+                "Spam text inside images passes undetected."
+            )
+            cls._unavailable_warned = True
+
     @classmethod
     def scan_image(cls, pil_img: Image.Image) -> OCRResult:
         """Scan image and extract text."""
-        # Note: If external OCR binary like Tesseract/PaddleOCR is installed, it is called here.
-        # Otherwise, basic text/metadata and fallback sanitization is performed.
         try:
-            # Check for standard EXIF / text chunks or run Tesseract if available
             extracted_text = ""
             try:
                 import pytesseract
                 extracted_text = pytesseract.image_to_string(pil_img, lang="rus+eng").strip()
-            except (ImportError, Exception):
-                # Fallback if tesseract binary is not installed in local environment
+            except ImportError:
+                cls._warn_unavailable()
+                extracted_text = ""
+            except Exception as ocr_err:
+                # Tesseract present but failed on this frame: not an install problem
+                logger.debug(f"Tesseract OCR error on frame: {ocr_err}")
                 extracted_text = ""
 
             sanitized = TextSanitizer.sanitize(extracted_text)
