@@ -2,12 +2,13 @@
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from api.auth import TelegramUser, get_current_telegram_user
 from api.routes.chats import router as chats_router
 from api.routes.database import router as database_router
 from api.routes.stats import router as stats_router
@@ -21,8 +22,8 @@ from services.ai.normalizer import TextSanitizer
 class ScanRequest(BaseModel):
     """Payload for interactive text scanning."""
 
-    text: str
-    user_info: str = "MiniApp interactive scan"
+    text: str = Field(max_length=2000)
+    user_info: str = Field(default="MiniApp interactive scan", max_length=200)
 
 
 @asynccontextmanager
@@ -44,10 +45,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Enable CORS for Telegram WebApp
+# Enable CORS strictly for Telegram WebApp origins (never "*": the API uses
+# credential-bearing initData headers)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*(telegram\.org|telegram\.me|t\.me)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,8 +68,26 @@ async def health_check() -> dict[str, str]:
 
 
 @app.post("/api/scan", tags=["Scanner"])
-async def scan_text_endpoint(payload: ScanRequest):
-    """Interactive text scanner for WebApp and Direct Messages."""
+async def scan_text_endpoint(
+    payload: ScanRequest,
+    user: TelegramUser = Depends(get_current_telegram_user),
+):
+    """Interactive text scanner for WebApp and Direct Messages.
+
+    Authenticated and rate-limited: without this the endpoint burns paid LLM
+    tokens for anyone who can reach the API port.
+    """
+    redis = await redis_manager.get_client()
+    rate_key = f"warden:scan_ratelimit:{user.id}"
+    calls = await redis.incr(rate_key)
+    if calls == 1:
+        await redis.expire(rate_key, 60)
+    if calls > 10:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Scan rate limit exceeded (10/minute)",
+        )
+
     sanitized = TextSanitizer.sanitize(payload.text)
     verdict = await ai_dispatcher.analyze_message(
         message_text=sanitized.clean_text,

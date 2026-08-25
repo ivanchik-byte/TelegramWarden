@@ -38,7 +38,7 @@ class SanctionsExecutor:
         username: Optional[str] = None,
         first_name: str = "",
     ) -> User:
-        """Get existing user record or create new one in permanent data layer."""
+        """Get existing user record or create new one, safe under concurrent joins."""
         result = await session.execute(
             select(User).where(User.chat_id == chat_id, User.telegram_id == telegram_id)
         )
@@ -51,7 +51,16 @@ class SanctionsExecutor:
                 first_name=first_name,
             )
             session.add(user)
-            await session.flush()
+            try:
+                async with session.begin_nested():
+                    await session.flush()
+            except Exception:
+                # Lost an insert race (unique constraint): the savepoint is
+                # rolled back automatically, re-read the winning row
+                result = await session.execute(
+                    select(User).where(User.chat_id == chat_id, User.telegram_id == telegram_id)
+                )
+                user = result.scalar_one()
         else:
             if username and user.username != username:
                 user.username = username
@@ -72,6 +81,12 @@ class SanctionsExecutor:
     ) -> int:
         """Issue a warning and apply punishment if warn limit is reached."""
         now = datetime.now(timezone.utc)
+
+        # Serialize concurrent sanctions on the same user: two simultaneous
+        # violations must not both read the pre-warn count and skip escalation
+        await session.execute(
+            select(User).where(User.id == user_db.id).with_for_update()
+        )
 
         # 1. Create Warn entry with chat-configured expiration
         exp_days = getattr(chat_db, 'warn_expiration_days', 7) or 7

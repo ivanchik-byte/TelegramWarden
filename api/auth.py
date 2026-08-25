@@ -3,12 +3,16 @@
 import hashlib
 import hmac
 import json
+import time
 import urllib.parse
 from typing import Optional
 from fastapi import Header, HTTPException, status
 from pydantic import BaseModel
 from core.config import settings
 from core.logger import logger
+
+# initData older than this is rejected as a replay
+MAX_INIT_DATA_AGE_SECONDS = 24 * 60 * 60
 
 
 class TelegramUser(BaseModel):
@@ -45,6 +49,16 @@ def validate_telegram_init_data(init_data_str: str, bot_token: str) -> Optional[
         computed_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
         if hmac.compare_digest(computed_hash, received_hash):
+            # Replay guard: Telegram regenerates initData on each app open,
+            # so stale payloads (copied once, replayed forever) are rejected.
+            try:
+                auth_date = int(parsed_params.get("auth_date", "0"))
+            except ValueError:
+                return None
+            if auth_date <= 0 or time.time() - auth_date > MAX_INIT_DATA_AGE_SECONDS:
+                logger.warning("Rejected initData with expired auth_date (possible replay)")
+                return None
+
             user_json_str = parsed_params.get("user")
             if user_json_str:
                 user_dict = json.loads(user_json_str)

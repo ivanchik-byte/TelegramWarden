@@ -14,8 +14,10 @@ from models import Chat, AuditLog, User
 
 def generate_valid_init_data(user_id: int, bot_token: str) -> str:
     """Helper generating valid HMAC-SHA256 signed Telegram initData string."""
+    import time
+
     params = {
-        "auth_date": "1700000000",
+        "auth_date": str(int(time.time())),
         "query_id": "AAHdF6IQAAAAAN0XohDhrOrc",
         "user": f'{{"id":{user_id},"first_name":"Admin","username":"admin_user"}}',
     }
@@ -43,6 +45,26 @@ def test_telegram_init_data_validation():
     tampered = valid_init_data.replace("888999", "777666")
     invalid_user = validate_telegram_init_data(tampered, test_token)
     assert invalid_user is None
+
+
+def test_stale_init_data_rejected_as_replay():
+    """initData older than 24h must be rejected even with a valid signature."""
+    import time
+    test_token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+
+    stale_params = {
+        "auth_date": str(int(time.time()) - 48 * 60 * 60),
+        "query_id": "AAHdF6IQAAAAAN0XohDhrOrc",
+        "user": '{"id":888999,"first_name":"Admin"}',
+    }
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(stale_params.items()))
+    secret_key = hmac.new(b"WebAppData", test_token.encode(), hashlib.sha256).digest()
+    stale_params["hash"] = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    import urllib.parse
+    stale_init_data = urllib.parse.urlencode(stale_params)
+
+    user = validate_telegram_init_data(stale_init_data, test_token)
+    assert user is None
 
 
 @pytest.mark.asyncio

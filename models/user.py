@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from core.database import Base
 from models.base import TimestampMixin
@@ -12,6 +12,11 @@ class User(Base, TimestampMixin):
     """Permanent user record within a specific moderated group."""
 
     __tablename__ = "users"
+    __table_args__ = (
+        # Concurrent joins/messages must never produce duplicate per-chat rows:
+        # duplicates permanently break warn escalation and reputation counters.
+        UniqueConstraint("chat_id", "telegram_id", name="uq_users_chat_telegram"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)

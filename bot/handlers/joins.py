@@ -1,5 +1,7 @@
 """Join events, CAS spammer detection, and captcha verification handlers."""
 
+import asyncio
+
 from aiogram import F, Router
 from aiogram.filters.chat_member_updated import ChatMemberUpdatedFilter, JOIN_TRANSITION
 from aiogram.types import CallbackQuery, ChatMemberUpdated, ChatPermissions
@@ -64,9 +66,11 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
                 logger.error(f"Failed to ban CAS spammer {user.id}: {err}")
 
     # 3. Check Anti-Raid Threshold
+    raid_lockdown = False
     if chat_db.anti_raid_enabled:
         raid_status = await AntiRaidDetector.record_join_and_check(chat_id=chat.id)
         if raid_status.lockdown_active:
+            raid_lockdown = True
             logger.warning(f"Raid lockdown active in chat {chat.id}. Restricting newcomer {user.id}.")
             try:
                 await event.bot.restrict_chat_member(
@@ -74,21 +78,21 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
                     user_id=user.id,
                     permissions=RESTRICTED_PERMISSIONS,
                 )
-                return
             except Exception as err:
                 logger.error(f"Failed to restrict user during raid: {err}")
 
-    # 4. Issue Captcha Challenge if enabled
+    # 4. Issue Captcha Challenge if enabled.
+    # Issued even during raid lockdown: the restriction is lifted only by a
+    # successful verification, otherwise lockdown-muted newcomers stay muted
+    # forever with no path to verify.
     if chat_db.captcha_enabled:
         try:
-            # Restrict newcomer until verified
             await event.bot.restrict_chat_member(
                 chat_id=chat.id,
                 user_id=user.id,
                 permissions=RESTRICTED_PERMISSIONS,
             )
 
-            # Send verification message with button
             mention_name = user.first_name or "Участник"
             keyboard = get_captcha_keyboard(user.id)
             captcha_msg = await event.bot.send_message(
@@ -97,7 +101,6 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
                 reply_markup=keyboard,
             )
 
-            # Store active challenge in Redis
             await CaptchaManager.create_challenge(
                 chat_id=chat.id,
                 user_id=user.id,
@@ -105,8 +108,42 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
                 timeout_seconds=chat_db.captcha_timeout_seconds,
             )
 
+            # Enforce the timeout: expired newcomers are kicked, not muted forever
+            asyncio.create_task(
+                enforce_captcha_timeout(
+                    bot=event.bot,
+                    chat_id=chat.id,
+                    user_id=user.id,
+                    message_id=captcha_msg.message_id,
+                    timeout_seconds=chat_db.captcha_timeout_seconds,
+                )
+            )
+
         except Exception as err:
             logger.error(f"Failed to issue captcha for user {user.id}: {err}")
+
+
+async def enforce_captcha_timeout(bot, chat_id: int, user_id: int, message_id: int, timeout_seconds: int) -> None:
+    """Kick the newcomer when the captcha window expires without verification."""
+    await asyncio.sleep(max(timeout_seconds, 5))
+
+    pending = await CaptchaManager.get_challenge_message_id(chat_id, user_id)
+    if pending is None or pending != message_id:
+        return  # already verified
+
+    try:
+        await CaptchaManager.complete_challenge(chat_id, user_id)
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception as cleanup_err:
+        logger.debug(f"Captcha timeout cleanup failed in {chat_id}: {cleanup_err}")
+
+    # Ban + immediate unban = kick: the user may rejoin and retry later
+    try:
+        await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+        await bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
+        logger.info(f"Captcha timeout: kicked user {user_id} from chat {chat_id}")
+    except Exception as kick_err:
+        logger.error(f"Failed to kick timed-out captcha user {user_id}: {kick_err}")
 
 
 @router.callback_query(F.data.startswith("captcha:verify:"))
@@ -126,6 +163,13 @@ async def handle_captcha_callback(callback: CallbackQuery, session: AsyncSession
     # Ensure only the target user can click their own verification button
     if clicker_user_id != target_user_id:
         await callback.answer(text="Эта кнопка предназначена для другого участника.", show_alert=True)
+        return
+
+    # Only a live challenge may be completed: stale buttons (expired session)
+    # must not restore permissions
+    pending_message_id = await CaptchaManager.get_challenge_message_id(chat_id, clicker_user_id)
+    if pending_message_id is None:
+        await callback.answer(text="Время на подтверждение истекло. Попросите администратора добавить вас заново.", show_alert=True)
         return
 
     # Complete challenge session in Redis
