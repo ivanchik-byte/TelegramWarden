@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = Field(default="INFO")
 
+    # Optional SHA-256 pin for the auto-downloaded OpenNSFW ONNX model
+    NSFW_MODEL_SHA256: str = Field(default="")
+
 
 # Singleton instance
 settings = Settings()

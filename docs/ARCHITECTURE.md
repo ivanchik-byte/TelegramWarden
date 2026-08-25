@@ -34,7 +34,7 @@ TelegramWarden построен по принципу гибридного се�
 | - Redis 7 (Tokens, Captcha)   |                   | 2. Risk Heuristics (0 tokens) |
 | - SQLAlchemy Async Engine     |                   | 3. Local NSFW ONNX (CPU 12ms) |
 +-------------------------------+                   | 4. Primary AI: Llama 3.1 70B  |
-                                                    | 5. Fallback AI: Gemini 1.5    |
+                                                    | 5. Fallback AI: Groq Llama 3.3    |
                                                     +-------------------------------+
 ```
 
@@ -133,8 +133,8 @@ TelegramWarden/
          |
          v
 [Этап 3: Нейросетевой анализ (AIDispatcher)]
-  - Первичный провайдер: NVIDIA NIM (Llama 3.1 70B Instruct)
-  - Резервный провайдер: Google Gemini 1.5 Flash (автопереключение при таймауте)
+  - Первичный провайдер: DeepSeek (OpenAI-compatible API)
+  - Резервный провайдер: Groq Llama 3.3 70B (автопереключение при таймауте)
   - Структурированный JSON-вывод вердикта (категория, уверенность, причина)
          |
          v

@@ -7,6 +7,7 @@ from typing import NamedTuple, Optional
 import numpy as np
 from PIL import Image
 import onnxruntime as ort
+from core.config import settings
 from core.logger import logger
 
 MODELS_DIR = Path("models_cache")
@@ -30,10 +31,15 @@ class NSFWDetector:
         self._is_initialized = False
 
     def _download_model_if_needed(self) -> None:
-        """Automatically download Yahoo Open-NSFW ONNX weights if not present."""
+        """Automatically download Yahoo Open-NSFW ONNX weights if not present.
+
+        When NSFW_MODEL_SHA256 is configured the downloaded artifact is verified
+        against it; a mismatch aborts usage of the file (supply-chain guard).
+        """
         if self.model_path.exists() and self.model_path.stat().st_size > 1_000_000:
             return
 
+        import hashlib
         import urllib.request
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         url = "https://huggingface.co/bluefoxcreation/open-nsfw/resolve/main/open-nsfw.onnx"
@@ -43,6 +49,15 @@ class NSFWDetector:
             with urllib.request.urlopen(req, timeout=40) as resp:
                 content = resp.read()
                 if len(content) > 1_000_000:
+                    expected_sha = settings.NSFW_MODEL_SHA256
+                    if expected_sha:
+                        actual_sha = hashlib.sha256(content).hexdigest()
+                        if actual_sha.lower() != expected_sha.lower():
+                            logger.error(
+                                f"OpenNSFW model checksum mismatch: expected {expected_sha}, got {actual_sha}. "
+                                "Refusing to save unverified model."
+                            )
+                            return
                     with open(self.model_path, "wb") as f:
                         f.write(content)
                     logger.info(f"Downloaded OpenNSFW ONNX weights ({len(content)} bytes)")

@@ -67,7 +67,7 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     days_in_chat = (datetime.now(timezone.utc) - user_db.first_seen_at).days
     is_forward = bool(message.forward_origin)
 
-    full_scan = getattr(chat_db, 'full_scan_enabled', False)
+    full_scan = chat_db.full_scan_enabled
     if full_scan:
         should_call_ai = True
     else:
@@ -103,9 +103,9 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
         logger.info(f"Category '{cat_key}' is set to IGNORE in chat {chat_id}. Message passed.")
         return
 
-    mod_mode = getattr(chat_db, 'moderation_mode', 'ai_judge') or 'ai_judge'
+    mod_mode = chat_db.moderation_mode or 'ai_judge'
     ban_threshold = chat_db.ai_confidence_threshold or 85.0
-    review_threshold = getattr(chat_db, 'ai_review_threshold', 50.0) or 50.0
+    review_threshold = chat_db.ai_review_threshold or 50.0
 
     if mod_mode == "strict_confidence":
         ban_threshold = max(ban_threshold, 95.0)

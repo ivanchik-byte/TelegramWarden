@@ -26,16 +26,20 @@ logger.add(
     enqueue=True,
 )
 
-# File logger with rotation & retention
-logger.add(
-    LOGS_DIR / "warden_{time:YYYY-MM-DD}.log",
-    level="DEBUG",
-    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-    rotation="00:00",
-    retention="14 days",
-    compression="zip",
-    enqueue=True,
-    encoding="utf-8",
-)
+# File logger with rotation & retention. A missing/unwritable logs directory
+# (CI, containers with read-only FS) must not crash the whole application.
+try:
+    logger.add(
+        LOGS_DIR / "warden_{time:YYYY-MM-DD}.log",
+        level="DEBUG",
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+        rotation="00:00",
+        retention="14 days",
+        compression="zip",
+        enqueue=True,
+        encoding="utf-8",
+    )
+except Exception as file_sink_err:
+    logger.warning(f"File logging disabled (logs dir unavailable): {file_sink_err}")
 
 __all__ = ["logger"]

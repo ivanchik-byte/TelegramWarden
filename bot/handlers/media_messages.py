@@ -9,6 +9,7 @@ Enforcement policy:
 """
 
 import io
+from datetime import datetime, timezone
 from aiogram import F, Router
 from aiogram.types import Message
 from sqlalchemy import func, select
@@ -100,7 +101,24 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     )
     user_db.message_count += 1
 
-    # 3. Determine media target and download into memory (no disk write)
+    # 3. Newbie media lock: newcomers cannot post media for N hours
+    lock_hours = chat_db.newbie_media_lock_hours or 0
+    if lock_hours > 0:
+        age_hours = (datetime.now(timezone.utc) - user_db.first_seen_at).total_seconds() / 3600
+        if age_hours < lock_hours:
+            logger.info(f"Newbie media lock active in {chat_id}: media from user {user_id} deleted ({age_hours:.1f}h < {lock_hours}h)")
+            await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
+            try:
+                await message.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"{message.from_user.first_name}, отправка медиафайлов доступна через "
+                         f"{lock_hours} часов после входа в чат.",
+                )
+            except Exception as notify_err:
+                logger.debug(f"Failed to send newbie lock notice: {notify_err}")
+            return
+
+    # 4. Determine media target and download into memory (no disk write)
     media_type, file_target, low_res_scan = _select_media_target(message)
     if not file_target:
         return

@@ -1,6 +1,6 @@
 # TelegramWarden
 
-Интеллектуальная система защиты, модерации и администрирования Telegram-сообществ на базе гибридного анализа LLM (NVIDIA NIM Llama 3.1 70B, Google Gemini), локальных ONNX нейросетей компьютерного зрения (Yahoo Open-NSFW) и Telegram Mini App панели управления.
+Интеллектуальная система защиты, модерации и администрирования Telegram-сообществ на базе гибридного анализа LLM (DeepSeek (primary), Groq Llama (fallback)), локальных ONNX нейросетей компьютерного зрения (Yahoo Open-NSFW) и Telegram Mini App панели управления.
 
 > ВНИМАНИЕ: Проект сейчас находится в стадии активной разработки и правок. Основной функционал я уже полностью реализовал и протестировал, но возможны баги. Если вы найдете ошибку, у вас есть предложения по улучшению или вопросы по сотрудничеству — пишите мне в личные сообщения.
 
@@ -38,8 +38,8 @@
   - Эвристический скоринг риска на базе репутации пользователя. Сообщения проверенных участников пропускаются мгновенно без расхода токенов.
 
 - **Гибридный LLM-движок классификации нарушений**:
-  - Первичный анализ через NVIDIA NIM (Llama 3.1 70B Instruct).
-  - Резервное отказоустойчивое переключение на Google Gemini 1.5 Flash при сетевых задержках или сбоях.
+  - Первичный анализ через DeepSeek (OpenAI-совместимый API).
+  - Резервное отказоустойчивое переключение на Groq (Llama 3.3 70B) при сетевых задержках или сбоях.
   - 7 категорий нарушений: спам/флуд, коммерческая реклама, крипто-скам/фишинг, прямые оскорбления, травля/угрозы, взрослый контент (NSFW), вредоносный код.
 
 - **Локальный конвейер проверки медиафайлов (Без внешних платных Vision API)**:
@@ -80,7 +80,7 @@
 - **База данных**: PostgreSQL 16 (SQLAlchemy 2.0 Async, asyncpg)
 - **Кэш и очереди**: Redis 7 (aioredis, скользящие окна rate-limiting, временные капчи)
 - **Локальный Machine Learning / CV**: ONNX Runtime (CPU), Pillow, NumPy, ImageHash, PyZbar
-- **LLM Провайдеры**: NVIDIA NIM OpenAI-compatible API, Google Gemini API
+- **LLM Провайдеры**: DeepSeek API, Groq API (оба OpenAI-compatible)
 - **Фронтенд панели**: React 18, Tailwind CSS, Telegram WebApp SDK
 - **Контейнеризация**: Docker, Docker Compose
 
@@ -103,9 +103,9 @@ flowchart TD
     RiskEngine -->|Подозрение >= 15%| MediaOrText{Тип контента}
     
     MediaOrText -->|Медиафайл| CVFilter[Локальный CV конвейер\npHash + QR + ONNX NSFW 12ms]
-    MediaOrText -->|Текст| LLMPrimary[3. NVIDIA NIM Llama 3.1 70B]
+    MediaOrText -->|Текст| LLMPrimary[3. DeepSeek]
     
-    LLMPrimary -->|Ошибка / Таймаут| LLMFallback[Резерв: Gemini 1.5 Flash]
+    LLMPrimary -->|Ошибка / Таймаут| LLMFallback[Резерв: Groq Llama 3.3 70B]
     LLMPrimary -->|Успех| Verdict[Структурированный вердикт]
     LLMFallback --> Verdict
     CVFilter --> Verdict
@@ -128,7 +128,7 @@ flowchart TD
 - Docker Desktop (для Windows) или Docker Engine + Docker Compose (для Linux)
 - Либо Python 3.12+, PostgreSQL 16+, Redis 7+
 - Токен Telegram-бота (от @BotFather)
-- API-ключ NVIDIA NIM или Google Gemini API
+- API-ключ DeepSeek и/или Groq (OpenAI-compatible)
 
 ---
 
@@ -145,7 +145,7 @@ cd TelegramWarden
 # 2. Создайте файл конфигурации
 cp .env.example .env
 
-# 3. Отредактируйте .env (укажите BOT_TOKEN, SUPERADMIN_IDS, NVIDIA_API_KEY)
+# 3. Отредактируйте .env (укажите BOT_TOKEN, SUPERADMIN_IDS, DEEPSEEK_API_KEY)
 nano .env
 
 # 4. Запустите весь стек
@@ -243,8 +243,8 @@ python -m bot.main
 | :--- | :---: | :--- | :--- |
 | `BOT_TOKEN` | Да | Токен Telegram-бота от @BotFather | `123456789:ABCdefGHIjklMNO` |
 | `SUPERADMIN_IDS` | Да | Telegram ID главных администраторов (через запятую) | `8667615215,12345678` |
-| `NVIDIA_API_KEY` | Да | API ключ NVIDIA NIM для доступа к Llama 3.1 | `nvapi-xxxxxxxxxxxxxxxx` |
-| `GEMINI_API_KEY` | Нет | API ключ Google Gemini для резервного анализа | `AIzaSyxxxxxxxxxxxxxxx` |
+| `DEEPSEEK_API_KEY` | Да | API ключ DeepSeek (первичный LLM) | `sk-xxxxxxxxxxxxxxxx` |
+| `FALLBACK_API_KEY` | Нет | API ключ Groq для резервного анализа (Llama 3.3 70B) | `gsk_xxxxxxxxxxxxxxxx` |
 | `WEBAPP_URL` | Да | Публичный HTTPS URL панели управления | `https://your-domain.com/app` |
 | `CLOUDFLARE_TUNNEL_TOKEN`| Нет | Токен постоянного бесплатного Cloudflare Tunnel | `eyJhIjoi...` |
 | `POSTGRES_USER` | Да | Пользователь базы данных PostgreSQL | `warden_user` |
