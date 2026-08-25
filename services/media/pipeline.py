@@ -21,6 +21,9 @@ class MediaModerationVerdict(NamedTuple):
     reason: str
     suggested_action: SuggestedAction
     evidence_frame_bytes: Optional[bytes]
+    # True when the hit comes from soft signals (QR/OCR) that must be
+    # confirmed by an admin instead of triggering automatic sanctions.
+    requires_admin_review: bool = False
 
 
 class MediaModerationPipeline:
@@ -31,6 +34,9 @@ class MediaModerationPipeline:
         cls,
         media_bytes: bytes,
         media_type: str = "photo",  # 'photo', 'video', 'video_note', 'sticker', 'animation'
+        scan_nsfw: bool = True,
+        scan_qr: bool = True,
+        scan_ocr: bool = True,
     ) -> MediaModerationVerdict:
         """Process incoming image or video through local detection layers."""
         if not media_bytes:
@@ -85,48 +91,54 @@ class MediaModerationPipeline:
             frame.save(frame_buffer, format="JPEG", quality=85)
             frame_bytes = frame_buffer.getvalue()
 
-            # A. QR Code Scanner
-            qr_result = QRDetector.scan_image(frame_bytes)
-            if qr_result.has_qr:
-                for payload in qr_result.payloads:
-                    if any(kw in payload.lower() for kw in ("t.me/", "http", "crypto", "ton", "bot")):
-                        logger.info(f"Suspicious QR link detected: {payload}")
-                        return MediaModerationVerdict(
-                            is_violation=True,
-                            category=ViolationCategory.COMMERCIAL_AD,
-                            confidence=95.0,
-                            reason=f"Обнаружен QR-код со ссылкой: {payload[:60]}",
-                            suggested_action=SuggestedAction.WARN,
-                            evidence_frame_bytes=frame_bytes,
-                        )
+            # A. QR Code Scanner — soft signal: any URL-bearing QR is flagged
+            # for admin review, not punished automatically (legitimate QR codes
+            # for menus, Wi-Fi and websites must not be sanctioned).
+            if scan_qr:
+                qr_result = QRDetector.scan_image(frame_bytes)
+                if qr_result.has_qr and qr_result.payloads:
+                    payload = qr_result.payloads[0]
+                    logger.info(f"QR code detected in media: {payload[:60]}")
+                    return MediaModerationVerdict(
+                        is_violation=True,
+                        category=ViolationCategory.COMMERCIAL_AD,
+                        confidence=95.0,
+                        reason=f"Обнаружен QR-код со ссылкой: {payload[:60]}",
+                        suggested_action=SuggestedAction.WARN,
+                        evidence_frame_bytes=frame_bytes,
+                        requires_admin_review=True,
+                    )
 
             # B. NSFW Local Detector
-            nsfw_result = await nsfw_detector.detect(frame)
-            if nsfw_result.is_nsfw:
-                logger.info(f"NSFW content detected: {nsfw_result.detected_classes}")
-                if phash_str:
-                    await PHashDeduplicator.register_spam_hash(phash_str)
-                return MediaModerationVerdict(
-                    is_violation=True,
-                    category=ViolationCategory.ADULT_NSFW,
-                    confidence=nsfw_result.confidence,
-                    reason="Обнаружен неприемлемый или порнографический контент",
-                    suggested_action=SuggestedAction.BAN_USER,
-                    evidence_frame_bytes=frame_bytes,
-                )
+            if scan_nsfw:
+                nsfw_result = await nsfw_detector.detect(frame)
+                if nsfw_result.is_nsfw:
+                    logger.info(f"NSFW content detected: {nsfw_result.detected_classes}")
+                    if phash_str:
+                        await PHashDeduplicator.register_spam_hash(phash_str)
+                    return MediaModerationVerdict(
+                        is_violation=True,
+                        category=ViolationCategory.ADULT_NSFW,
+                        confidence=nsfw_result.confidence,
+                        reason="Обнаружен неприемлемый или порнографический контент",
+                        suggested_action=SuggestedAction.BAN_USER,
+                        evidence_frame_bytes=frame_bytes,
+                    )
 
-            # C. OCR Text Scanner
-            ocr_result = OCREngine.scan_image(frame)
-            if ocr_result.has_text and ocr_result.sanitized.extracted_urls:
-                logger.info("OCR detected URLs inside image banner")
-                return MediaModerationVerdict(
-                    is_violation=True,
-                    category=ViolationCategory.COMMERCIAL_AD,
-                    confidence=90.0,
-                    reason="Обнаружен рекламный баннер со скрытыми ссылками",
-                    suggested_action=SuggestedAction.WARN,
-                    evidence_frame_bytes=frame_bytes,
-                )
+            # C. OCR Text Scanner — soft signal, same admin-review policy as QR
+            if scan_ocr:
+                ocr_result = OCREngine.scan_image(frame)
+                if ocr_result.has_text and ocr_result.sanitized.extracted_urls:
+                    logger.info("OCR detected URLs inside image banner")
+                    return MediaModerationVerdict(
+                        is_violation=True,
+                        category=ViolationCategory.COMMERCIAL_AD,
+                        confidence=90.0,
+                        reason="Обнаружен рекламный баннер со скрытыми ссылками",
+                        suggested_action=SuggestedAction.WARN,
+                        evidence_frame_bytes=frame_bytes,
+                        requires_admin_review=True,
+                    )
 
         # 4. Clean Frames Cleanup
         # All frames discarded from memory automatically

@@ -6,6 +6,8 @@ from aiogram.types import Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.utils.guards import enforce_source_guards
+from bot.utils.notices import send_admin_review_card, send_group_moderation_notice
 from bot.utils.sanctions import SanctionsExecutor
 from core.logger import logger
 from models import Chat, AuditLog
@@ -35,18 +37,9 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     if not chat_db.is_active:
         return
 
-    # 2. Anti-Channel protection (Send as channel)
-    if message.sender_chat:
-        sender_channel_id = message.sender_chat.id
-        if sender_channel_id != chat_id and not chat_db.allow_sender_chat:
-            if sender_channel_id not in (chat_db.whitelisted_channels or []):
-                logger.info(f"Unauthorized sender_chat {sender_channel_id} in group {chat_id}. Deleting.")
-                await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
-                try:
-                    await message.bot.ban_chat_sender_chat(chat_id=chat_id, sender_chat_id=sender_channel_id)
-                except Exception:
-                    pass
-                return
+    # 2. Anti-Channel / Anti-Inline bot source protection (shared guard)
+    if not await enforce_source_guards(message, chat_db):
+        return
 
     if not message.from_user:
         return
@@ -55,15 +48,7 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     if user_id in (chat_db.whitelisted_users or []):
         return  # Whitelisted user bypass
 
-    # 3. Anti-Inline bot protection (via_bot)
-    if message.via_bot and not chat_db.allow_via_bot:
-        bot_username = f"@{message.via_bot.username}" if message.via_bot.username else ""
-        if bot_username not in (chat_db.whitelisted_bots or []):
-            logger.info(f"Unauthorized via_bot {bot_username} in {chat_id}. Deleting.")
-            await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
-            return
-
-    # 4. Get or create permanent user profile
+    # 3. Get or create permanent user profile
     user_db = await SanctionsExecutor.get_or_create_user(
         session=session,
         chat_id=chat_id,
@@ -232,46 +217,32 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     await session.flush()
 
     # Send informative moderation card with appeal button to group
-    from bot.keyboards.admin_logs import get_group_moderation_keyboard, get_admin_log_keyboard
     user_name = message.from_user.full_name if message.from_user else f"ID {user_id}"
-
-    notice_text = (
-        "<b>TelegramWarden | Модерация</b>\n\n"
-        f"• <b>Пользователь:</b> {user_name} (ID: <code>{user_id}</code>)\n"
-        f"• <b>Действие:</b> <code>{action_title}</code>\n"
-        f"• <b>Причина:</b> {verdict.category.value} ({verdict.confidence}%)\n"
-        f"• <b>Пояснение:</b> {verdict.reason}\n\n"
-        "<i>Если вы не согласны с решением — нажмите кнопку ниже для подачи апелляции:</i>"
+    await send_group_moderation_notice(
+        bot=message.bot,
+        chat_id=chat_id,
+        user_name=user_name,
+        user_id=user_id,
+        action_title=action_title,
+        category=verdict.category.value,
+        confidence=verdict.confidence,
+        reason=verdict.reason,
+        audit_entry_id=audit_entry.id,
     )
-    try:
-        await message.bot.send_message(
-            chat_id=chat_id,
-            text=notice_text,
-            reply_markup=get_group_moderation_keyboard(chat_id, user_id, audit_entry.id),
-        )
-    except Exception as err:
-        logger.warning(f"Failed to post group moderation notice: {err}")
 
-    # Send admin review card if enabled (or to log channel)
-    if getattr(chat_db, 'send_suspicious_to_admin', True):
-        admin_card_text = (
-            "🔍 <b>Спорное сообщение на проверку администраторам</b>\n\n"
-            f"• <b>Чат:</b> {chat_db.title or chat_id}\n"
-            f"• <b>От:</b> {user_name} (ID: <code>{user_id}</code>)\n"
-            f"• <b>Текст СМС:</b> <i>«{sanitized.clean_text[:200]}»</i>\n"
-            f"• <b>Оценка ИИ:</b> {verdict.category.value} ({int(verdict.confidence)}%)\n"
-            f"• <b>Причина:</b> {verdict.reason}\n\n"
-            "<i>Выберите действие ниже:</i>"
+    # Send admin review card (log channel, falling back to the group chat)
+    if chat_db.send_suspicious_to_admin:
+        await send_admin_review_card(
+            bot=message.bot,
+            chat_db=chat_db,
+            user_name=user_name,
+            user_id=user_id,
+            message_preview=sanitized.clean_text,
+            category=verdict.category.value,
+            confidence=verdict.confidence,
+            reason=verdict.reason,
+            audit_entry_id=audit_entry.id,
+            is_ban_action=(action_type == "ban_user"),
         )
-        target_dest = getattr(chat_db, 'log_channel_id', None)
-        if target_dest:
-            try:
-                await message.bot.send_message(
-                    chat_id=target_dest,
-                    text=admin_card_text,
-                    reply_markup=get_admin_log_keyboard(chat_id, user_id, audit_entry.id, is_ban_action=(action_type == "ban_user")),
-                )
-            except Exception as log_err:
-                logger.warning(f"Failed to send review card to log channel {target_dest}: {log_err}")
 
 

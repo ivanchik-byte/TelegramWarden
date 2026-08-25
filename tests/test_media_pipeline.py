@@ -9,7 +9,7 @@ import av
 
 from services.ai.schema import SuggestedAction, ViolationCategory
 from services.media.phash import PHashDeduplicator
-from services.media.qr_detector import QRDetector
+from services.media.qr_detector import QRDetector, QRScanResult
 from services.media.video_sampler import VideoKeyframeSampler
 from services.media.pipeline import MediaModerationPipeline
 
@@ -101,3 +101,43 @@ async def test_media_pipeline_catches_nsfw_mock():
         assert verdict.confidence == 96.4
         assert verdict.suggested_action == SuggestedAction.BAN_USER
         assert verdict.evidence_frame_bytes is not None
+        assert verdict.requires_admin_review is False
+
+
+@pytest.mark.asyncio
+async def test_media_pipeline_disabled_scanners_skip_detection():
+    """Per-chat scanner toggles must actually disable their scan layer."""
+    image_bytes = create_synthetic_image(color=(255, 50, 50))
+
+    with patch("services.media.pipeline.PHashDeduplicator.is_known_spam", AsyncMock(return_value=False)), \
+         patch("services.media.pipeline.nsfw_detector.detect", AsyncMock()) as mock_detect:
+        from services.media.nsfw_detector import NSFWDetectionResult
+        mock_detect.return_value = NSFWDetectionResult(is_nsfw=True, confidence=99.0, detected_classes=["X"])
+
+        verdict = await MediaModerationPipeline.process_media(
+            image_bytes, media_type="photo", scan_nsfw=False,
+        )
+
+        mock_detect.assert_not_called()
+        assert verdict.is_violation is False
+
+
+@pytest.mark.asyncio
+async def test_media_pipeline_qr_hit_requires_admin_review():
+    """A QR code hit must be flagged for admin review, not auto-sanctioned."""
+    fake_qr_bytes = create_synthetic_image(color=(0, 255, 0))
+    fake_qr = QRScanResult(has_qr=True, payloads=["https://example.com/join"])
+
+    with patch("services.media.pipeline.PHashDeduplicator.is_known_spam", AsyncMock(return_value=False)), \
+         patch("services.media.pipeline.QRDetector.scan_image", return_value=fake_qr), \
+         patch("services.media.pipeline.nsfw_detector.detect") as mock_detect:
+        from services.media.nsfw_detector import NSFWDetectionResult
+        mock_detect.return_value = NSFWDetectionResult(is_nsfw=False, confidence=1.0, detected_classes=[])
+
+        verdict = await MediaModerationPipeline.process_media(
+            fake_qr_bytes, media_type="photo",
+        )
+
+        assert verdict.is_violation is True
+        assert verdict.requires_admin_review is True
+        assert verdict.suggested_action != SuggestedAction.BAN_USER
