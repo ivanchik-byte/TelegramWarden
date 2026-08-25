@@ -36,18 +36,21 @@ def _coerce_bool(value, default: bool = False) -> bool:
 
 # Per-category confidence bands (floor, ceiling). Ceilings for warn/mute-tier
 # categories stay below the default ban threshold (85%) so that raw LLM
-# overconfidence alone can never trigger a confidence-based ban.
+# overconfidence alone can never trigger a confidence-based ban. Floors sit
+# BELOW the default review threshold (50%): a genuinely unsure model must
+# not be clamped up into automatic sanctions — unsure means pass to review
+# only if the model itself crossed 50.
 CATEGORY_CONFIDENCE_BANDS = {
     "toxic_insult": (5.0, 84.0),
     "commercial_ad": (5.0, 84.0),
     "flood_spam": (5.0, 94.0),
     "other_violation": (5.0, 94.0),
-    "crypto_scam": (50.0, 99.0),
-    "phishing": (50.0, 99.0),
+    "crypto_scam": (35.0, 99.0),
+    "phishing": (35.0, 99.0),
     # Low floor: an unsure LLM must not be clamped UP into the ban tier.
     # Severe-contraband banning is driven by the category flag, not confidence.
     "illegal_contraband": (10.0, 99.0),
-    "adult_nsfw": (60.0, 99.0),
+    "adult_nsfw": (40.0, 99.0),
 }
 
 

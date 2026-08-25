@@ -282,3 +282,26 @@ async def test_string_false_is_not_parsed_as_true():
     verdict = await dispatcher.analyze_message("привет")
 
     assert verdict.is_violation is False
+
+
+@pytest.mark.asyncio
+async def test_unsure_scam_verdict_stays_below_review_threshold():
+    """A 20% scam guess must not be clamped up across the 50% review threshold."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "crypto_scam",
+            "confidence": 20.0,
+            "reason": "Похоже на скам, но уверености нет",
+            "suggested_action": "delete_message",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("какой-то текст про заработок")
+
+    assert verdict.category == ViolationCategory.CRYPTO_SCAM
+    # Below the default 50% review threshold: unsure means no sanction
+    assert verdict.confidence == 35.0
+    assert verdict.confidence < 50.0
