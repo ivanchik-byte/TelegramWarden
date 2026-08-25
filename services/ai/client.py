@@ -26,6 +26,18 @@ FAIL_OPEN_REASON = "AI Provider unavailable (fail-open to prevent false bans)"
 _TRUE_STRINGS = {"true", "1", "yes"}
 
 
+def normalize_confidence(conf: float) -> float:
+    """Bring model confidence onto the 0-100 threat scale.
+
+    LLMs intermittently answer in the 0-1 probability scale: without
+    normalization a 0.99 (near-certain detection) was clamped down to the
+    category floor and silently failed the review gate.
+    """
+    if conf <= 1.0:
+        return round(conf * 100, 2)
+    return conf
+
+
 def _coerce_bool(value, default: bool = False) -> bool:
     """Parse LLM booleans strictly: the string 'false' must not become True."""
     if isinstance(value, bool):
@@ -110,10 +122,14 @@ class AIClientDispatcher:
             action_key = "pass_message" if category_key == "clean" else "warn"
             parsed_dict["suggested_action"] = action_key
 
+        confidence_unknown = False
         try:
-            conf = float(parsed_dict.get("confidence", 0.0))
+            conf = normalize_confidence(float(parsed_dict.get("confidence", 0.0)))
         except (TypeError, ValueError):
-            conf = 0.0
+            # Garbage from the model must read as "unknown", never as a
+            # fabricatable number: unknown stays below floors instead of
+            # being clamped UP into fake certainty
+            confidence_unknown = True
 
         # Normalize Confidence to Threat Risk (0% = Safe Green, 100% = Danger Red)
         if not is_violation or category_key == "clean":
@@ -123,6 +139,10 @@ class AIClientDispatcher:
             parsed_dict["category"] = "clean"
             parsed_dict["confidence"] = min(max(conf, 1.0), 15.0)
             parsed_dict["suggested_action"] = "pass_message"
+        elif confidence_unknown:
+            # Unknown certainty on a claimed violation: keep the flag but do
+            # NOT manufacture a number — every threshold gate sees it as unsure
+            parsed_dict["confidence"] = 1.0
         else:
             # Clamp violation confidence into its category band: preserves the
             # model's relative certainty while preventing habitual extremes (1%/99%).

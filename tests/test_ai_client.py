@@ -305,3 +305,45 @@ async def test_unsure_scam_verdict_stays_below_review_threshold():
     # Below the default 50% review threshold: unsure means no sanction
     assert verdict.confidence == 35.0
     assert verdict.confidence < 50.0
+
+
+@pytest.mark.asyncio
+async def test_zero_one_scale_confidence_is_normalized():
+    """A model answering in the 0-1 probability scale must not be clamped to the floor."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "adult_nsfw",
+            "confidence": 0.99,
+            "reason": "Порнографический контент",
+            "suggested_action": "ban_user",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("медиа без описания")
+
+    # 0.99 on the probability scale == 99% threat, not a floor-clamped 40%
+    assert verdict.confidence > 90.0
+
+
+@pytest.mark.asyncio
+async def test_garbage_confidence_is_unknown_not_fabricated():
+    """Non-numeric confidence on a violation must stay below every floor/gate."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "crypto_scam",
+            "confidence": "85%",
+            "reason": "Скам",
+            "suggested_action": "warn",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("текст со скамом")
+
+    assert verdict.is_violation is True
+    assert verdict.confidence < 35.0

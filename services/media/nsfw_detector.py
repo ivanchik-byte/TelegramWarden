@@ -161,11 +161,12 @@ class NSFWDetector:
                     detected_classes=["ADULT_NSFW_EXPOSED"] if is_nsfw else ["SAFE"],
                 )
 
-            return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[])
+            logger.warning(f"Unexpected NSFW model output shape: {raw_scores.shape}")
+            return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[], model_available=False)
 
         except Exception as err:
             logger.warning(f"ONNX NSFW inference error: {err}")
-            return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[])
+            return NSFWDetectionResult(is_nsfw=False, confidence=0.0, detected_classes=[], model_available=False)
 
     async def detect(self, pil_img: Image.Image) -> NSFWDetectionResult:
         """Asynchronously run CPU inference in thread pool without blocking event loop."""
