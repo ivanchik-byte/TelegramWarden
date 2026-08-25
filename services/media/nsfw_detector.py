@@ -29,6 +29,7 @@ class NSFWDetector:
         self.model_path = model_path
         self._session: Optional[ort.InferenceSession] = None
         self._is_initialized = False
+        self._unavailable_warned = False
 
     def _download_model_if_needed(self) -> None:
         """Automatically download Yahoo Open-NSFW ONNX weights if not present.
@@ -73,6 +74,12 @@ class NSFWDetector:
 
         if not self.model_path.exists() or self.model_path.stat().st_size < 1_000_000:
             logger.warning(f"NSFW ONNX model not found at {self.model_path}. Will use safe fallback.")
+            if not self._unavailable_warned:
+                logger.warning(
+                    "NSFW MODERATION IS INACTIVE: images pass unscanned. "
+                    "Fix the model file and restart the bot."
+                )
+                self._unavailable_warned = True
             self._is_initialized = True
             return False
 
@@ -92,6 +99,9 @@ class NSFWDetector:
             return True
         except Exception as err:
             logger.error(f"Failed to load NSFW ONNX model: {err}")
+            if not self._unavailable_warned:
+                logger.warning("NSFW MODERATION IS INACTIVE after load failure — do not ignore this.")
+                self._unavailable_warned = True
             self._is_initialized = True
             return False
 

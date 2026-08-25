@@ -253,7 +253,7 @@ async def handle_manual_mute_command(message: Message, session: AsyncSession) ->
         first_name=target_user.first_name,
     )
 
-    await SanctionsExecutor.mute_user(
+    mute_applied = await SanctionsExecutor.mute_user(
         bot=message.bot,
         session=session,
         chat_id=chat_id,
@@ -264,6 +264,13 @@ async def handle_manual_mute_command(message: Message, session: AsyncSession) ->
     await session.commit()
 
     admin_name = message.from_user.first_name if message.from_user else "Admin"
+    if not mute_applied:
+        await message.reply(
+            f"⚠️ <b>Не удалось замутить {target_user.first_name}</b> — проверьте права бота "
+            f"(бот должен быть администратором с правом ограничивать участников)."
+        )
+        return
+
     await message.reply(
         f"🔇 <b>Пользователь {target_user.first_name} отправлен в мут</b>\n\n"
         f"• <b>Длительность:</b> {duration_minutes} мин.\n"
@@ -347,7 +354,7 @@ async def handle_manual_ban_command(message: Message, session: AsyncSession) -> 
         first_name=target_user.first_name,
     )
 
-    await SanctionsExecutor.ban_user(
+    ban_applied = await SanctionsExecutor.ban_user(
         bot=message.bot,
         session=session,
         chat_id=chat_id,
@@ -357,6 +364,13 @@ async def handle_manual_ban_command(message: Message, session: AsyncSession) -> 
     await session.commit()
 
     admin_name = message.from_user.first_name if message.from_user else "Admin"
+    if not ban_applied:
+        await message.reply(
+            f"⚠️ <b>Не удалось забанить {target_user.first_name}</b> — проверьте права бота "
+            f"(бот должен быть администратором с правом блокировать участников)."
+        )
+        return
+
     await message.reply(
         f"⛔ <b>Пользователь {target_user.first_name} заблокирован</b>\n\n"
         f"• <b>Причина:</b> {reason}\n"

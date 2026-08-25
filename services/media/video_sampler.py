@@ -1,10 +1,12 @@
 """In-memory video keyframe extraction using PyAV (0 tokens on CPU)."""
 
 import io
-from typing import Optional
 from PIL import Image
 import av
 from core.logger import logger
+
+# Fractions of the timeline sampled for inspection
+SAMPLE_FRACTIONS = [0.05, 0.25, 0.50, 0.75, 0.95]
 
 
 class VideoKeyframeSampler:
@@ -17,28 +19,33 @@ class VideoKeyframeSampler:
         num_frames: int = 5,
         target_size: tuple[int, int] = (640, 640),
     ) -> list[Image.Image]:
-        """Extract evenly distributed PIL Image frames across video timeline."""
+        """Extract evenly distributed small PIL Images across the video timeline.
+
+        Frames are down-scaled immediately upon decode so raw YUV frames never
+        accumulate (a long video held raw would consume hundreds of MB).
+        """
         if not video_bytes:
             return []
 
         frames: list[Image.Image] = []
         try:
             container = av.open(io.BytesIO(video_bytes))
+        except Exception as err:
+            logger.warning(f"Video container open failed: {err}")
+            return []
+
+        try:
             video_stream = next((s for s in container.streams if s.type == "video"), None)
             if not video_stream:
                 logger.warning("No video stream found in container")
                 return []
 
-            # Determine total duration or frame count
             duration = video_stream.duration
-            time_base = video_stream.time_base
+            fractions = SAMPLE_FRACTIONS[:num_frames]
 
-            # If duration is available in time_base units
+            # Preferred path: seek to timeline positions
             if duration and duration > 0:
-                target_pts_list = [
-                    int(duration * fraction)
-                    for fraction in [0.05, 0.25, 0.50, 0.75, 0.95][:num_frames]
-                ]
+                target_pts_list = [int(duration * fraction) for fraction in fractions]
                 for pts in target_pts_list:
                     try:
                         container.seek(pts, stream=video_stream)
@@ -50,29 +57,26 @@ class VideoKeyframeSampler:
                     except Exception as seek_err:
                         logger.debug(f"Seek failed for pts {pts}: {seek_err}")
 
-            # Fallback if seeking is unsupported or duration is unavailable: decode sequentially
+            # Fallback when seeking unsupported: sequential decode keeping only
+            # down-scaled thumbnails (bounded memory), then pick sampled indices
             if not frames:
-                all_decoded = []
+                all_thumbs: list[Image.Image] = []
                 for frame in container.decode(video_stream):
-                    all_decoded.append(frame)
-                    if len(all_decoded) > 100:  # Cap max frames to prevent memory spikes
+                    thumb = frame.to_image()
+                    thumb.thumbnail(target_size)
+                    all_thumbs.append(thumb)
+                    if len(all_thumbs) >= 150:  # hard cap against pathological streams
                         break
-
-                if all_decoded:
-                    total_count = len(all_decoded)
-                    indices = [
-                        int(total_count * fraction)
-                        for fraction in [0.05, 0.25, 0.50, 0.75, 0.95][:num_frames]
+                if all_thumbs:
+                    total_count = len(all_thumbs)
+                    frames = [
+                        all_thumbs[min(int(total_count * fraction), total_count - 1)]
+                        for fraction in fractions
                     ]
-                    for idx in indices:
-                        clamped_idx = min(idx, total_count - 1)
-                        pil_frame = all_decoded[clamped_idx].to_image()
-                        pil_frame.thumbnail(target_size)
-                        frames.append(pil_frame)
 
-            container.close()
             return frames
-
         except Exception as err:
             logger.warning(f"Video keyframe sampling error: {err}")
             return frames
+        finally:
+            container.close()
