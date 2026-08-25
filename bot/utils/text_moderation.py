@@ -14,7 +14,7 @@ from bot.utils.sanctions import SanctionsExecutor
 from core.logger import logger
 from models import AuditLog, Chat, User
 from services.ai.client import ai_dispatcher
-from services.ai.normalizer import SanitizedTextResult, TextSanitizer
+from services.ai.normalizer import TextSanitizer
 from services.ai.risk_scorer import RiskScorer
 from services.ai.schema import SuggestedAction, ViolationCategory
 from services.moderation.night_mode import is_night_mode_active
