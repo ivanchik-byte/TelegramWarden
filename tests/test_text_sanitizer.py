@@ -41,3 +41,21 @@ def test_homoglyph_canonicalization():
 
     # In canonical text, Cyrillic lookalikes should be normalized
     assert result.canonical_text.isascii()
+
+
+def test_hidden_text_link_entities_are_extracted():
+    """Telegram text_link entities hide URLs behind innocent display text."""
+    from types import SimpleNamespace
+    from bot.utils.text_moderation import extract_entity_urls
+
+    message = SimpleNamespace(
+        text="просто привет",
+        caption=None,
+        entities=[
+            SimpleNamespace(type="text_link", offset=0, length=7, url="https://spam.example/ton"),
+            SimpleNamespace(type="bold", offset=8, length=5, url=None),
+        ],
+        caption_entities=[],
+    )
+    urls = extract_entity_urls(message)
+    assert "https://spam.example/ton" in urls

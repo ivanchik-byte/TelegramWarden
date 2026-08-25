@@ -1,5 +1,7 @@
 """Edited message handler protecting against stealth edit spam attacks."""
 
+from datetime import datetime, timezone
+
 from aiogram import F, Router
 from aiogram.types import Message
 from sqlalchemy import select
@@ -7,10 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.utils.notices import send_admin_review_card
 from bot.utils.sanctions import SanctionsExecutor
+from bot.utils.text_moderation import extract_entity_urls
 from core.logger import logger
 from models import AuditLog, Chat
 from services.ai.client import ai_dispatcher
 from services.ai.normalizer import TextSanitizer
+from services.ai.risk_scorer import RiskScorer
 from services.ai.schema import SuggestedAction
 from services.moderation.night_mode import is_night_mode_active
 
@@ -43,10 +47,35 @@ async def handle_edited_message(message: Message, session: AsyncSession) -> None
 
     # Sanitize edited text (message body or media caption)
     sanitized = TextSanitizer.sanitize(message.text or message.caption or "")
+    # Hidden-entity links count exactly like visible ones
+    for url in extract_entity_urls(message):
+        if url not in sanitized.extracted_urls:
+            sanitized.extracted_urls.append(url)
 
-    # If edited message now contains links or suspicious text -> inspect immediately
-    if not (sanitized.extracted_urls or sanitized.extracted_usernames or sanitized.had_invisible_characters):
+    # Full heuristic pass: an edit turning clean text into a toxic offer with
+    # no links must still reach the LLM (same 0-token filter as normal sends).
+    days_in_chat = (datetime.now(timezone.utc) - user_db.first_seen_at).days
+    risk_result = RiskScorer.evaluate(
+        sanitized=sanitized,
+        user_message_count=user_db.message_count,
+        user_days_in_chat=days_in_chat,
+        is_forward=False,
+        sampling_rate=chat_db.ai_sampling_rate,
+    )
+
+    triggered = bool(
+        sanitized.extracted_urls or sanitized.extracted_usernames
+        or sanitized.had_invisible_characters or risk_result.should_call_ai
+    )
+    if not triggered:
         return
+
+    if not (sanitized.extracted_urls or sanitized.extracted_usernames
+            or sanitized.had_invisible_characters):
+        logger.info(
+            f"Edited message flagged by risk scorer in chat {chat_id} "
+            f"(score={risk_result.risk_score}, reasons={risk_result.trigger_reasons})"
+        )
 
     logger.info(f"Edited message contains new links/triggers in chat {chat_id}. Inspecting via AI...")
     verdict = await ai_dispatcher.analyze_message(
