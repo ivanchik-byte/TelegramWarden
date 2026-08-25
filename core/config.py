@@ -80,15 +80,28 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def superadmin_id_list(self) -> list[int]:
-        """Parse comma-separated superadmin IDs from environment."""
-        if not self.SUPERADMIN_IDS:
-            return [8667615215, 123456789]
+        """Parse comma-separated superadmin IDs from environment (empty if unset)."""
         ids = []
         for part in self.SUPERADMIN_IDS.split(","):
             cleaned = part.strip()
             if cleaned.isdigit():
                 ids.append(int(cleaned))
-        return ids if ids else [8667615215, 123456789]
+        return ids
+
+    def validate_runtime_secrets(self) -> None:
+        """Fail fast on startup when production secrets are left at defaults."""
+        problems = []
+        fields = type(self).model_fields
+        if self.BOT_TOKEN == fields["BOT_TOKEN"].default:
+            problems.append("BOT_TOKEN is not configured (still default)")
+        if self.SECRET_KEY == fields["SECRET_KEY"].default:
+            problems.append("SECRET_KEY is not configured (still default)")
+        if problems:
+            raise RuntimeError(
+                "Refusing to start TelegramWarden with insecure defaults: "
+                + "; ".join(problems)
+                + ". Set them via environment variables or .env"
+            )
 
 
     # Data Retention Policies (in days/hours)

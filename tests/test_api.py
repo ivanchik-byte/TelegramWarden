@@ -56,6 +56,31 @@ async def test_api_health_check():
 
 
 @pytest.mark.asyncio
+async def test_missing_init_data_is_unauthorized():
+    """Requests without initData must be rejected, never resolved to a default superadmin."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/chats/-100123456")
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_tampered_init_data_is_unauthorized():
+    """Tampered initData signatures must be rejected with 401."""
+    test_token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+    valid_init_data = generate_valid_init_data(user_id=888999, bot_token=test_token)
+    tampered = valid_init_data.replace("888999", "777666")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            "/api/chats/-100123456",
+            headers={"X-Telegram-Init-Data": tampered},
+        )
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_get_and_patch_chat_settings(db_session: AsyncSession):
     """Verify chat settings retrieval and modification via REST API."""
     chat = Chat(

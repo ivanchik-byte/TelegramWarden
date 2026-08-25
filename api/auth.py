@@ -66,6 +66,10 @@ async def get_current_telegram_user(
         if user:
             return user
 
-    # Fallback to configured SuperAdmin for direct web testing
-    superadmin_id = settings.superadmin_id_list[0] if settings.superadmin_id_list else 8667615215
-    return TelegramUser(id=superadmin_id, first_name="SuperAdmin")
+    # No fallback by design: unauthenticated or tampered requests must never
+    # resolve to any account, let alone a superadmin.
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing Telegram initData",
+        headers={"WWW-Authenticate": "Telegram"},
+    )

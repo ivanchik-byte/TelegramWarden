@@ -45,6 +45,9 @@ async def main() -> None:
     """Initialize bot instance, register middlewares, attach routers and start bot + API."""
     logger.info("Starting TelegramWarden Unified Service (Bot + Mini App API)...")
 
+    # 0. Refuse to run with default secrets in production
+    settings.validate_runtime_secrets()
+
     # 1. Initialize Database & Redis
     await init_db()
     await redis_manager.get_client()
