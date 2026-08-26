@@ -165,10 +165,12 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
 
     # 4. Caption text follows the exact same moderation policy as plain text.
     # A caption hit does NOT skip the image scan: "порно + спам-каптион" must
-    # still reach the NSFW pipeline and its repeat-offense escalation.
+    # still reach the NSFW pipeline for logging and pHash registry, but duplicate
+    # punitive sanctions on the same message must be avoided.
     caption_text = message.caption or ""
+    caption_sanctioned = False
     if caption_text:
-        await moderate_text_content(
+        caption_sanctioned = await moderate_text_content(
             bot=message.bot,
             session=session,
             message=message,
@@ -176,6 +178,7 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
             user_db=user_db,
             raw_text=caption_text,
         )
+
 
     # 5. Run local media pipeline honoring per-chat scanner toggles.
     # Animations (MP4/GIF) and video stickers (webm) need keyframe sampling,
@@ -295,7 +298,13 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         )
         return
 
-    if verdict.category == ViolationCategory.ADULT_NSFW:
+    if caption_sanctioned:
+        # Message was already deleted and sanctioned by caption moderation.
+        # We record the media finding in audit log and alert admins, but avoid double warnings.
+        action_title = "Удаление (каптион уже наказан)"
+        action_type = "caption_already_sanctioned"
+        is_ban_action = False
+    elif verdict.category == ViolationCategory.ADULT_NSFW:
         prior_offenses = await _count_prior_nsfw_offenses(session, user_db)
 
         if prior_offenses >= 1:
@@ -330,6 +339,7 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         action_title = "Удаление + Варн"
         action_type = "warn"
         is_ban_action = False
+
 
     # 6. Record in Audit Logs
     audit_entry = AuditLog(

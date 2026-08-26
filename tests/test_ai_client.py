@@ -347,3 +347,26 @@ async def test_garbage_confidence_is_unknown_not_fabricated():
 
     assert verdict.is_violation is True
     assert verdict.confidence < 35.0
+
+
+@pytest.mark.asyncio
+async def test_exact_one_point_zero_confidence_is_not_inflated_to_hundred():
+    """Confidence 1.0 means 1% threat on 0-100 scale, must not become 100% / ban-tier."""
+    dispatcher = AIClientDispatcher()
+
+    dispatcher.primary_client.chat.completions.create = AsyncMock(
+        return_value=_make_verdict_response({
+            "is_violation": True,
+            "category": "crypto_scam",
+            "confidence": 1.0,
+            "reason": "Едва заметное подозрение",
+            "suggested_action": "warn",
+        })
+    )
+
+    verdict = await dispatcher.analyze_message("текст с минимальным подозрением")
+
+    # Clamped to category floor (35.0), never inflated to 99.0/100.0 (ban tier)
+    assert verdict.confidence <= 35.0
+    assert verdict.confidence < 50.0
+

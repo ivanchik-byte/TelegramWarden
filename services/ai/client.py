@@ -29,13 +29,15 @@ _TRUE_STRINGS = {"true", "1", "yes"}
 def normalize_confidence(conf: float) -> float:
     """Bring model confidence onto the 0-100 threat scale.
 
-    LLMs intermittently answer in the 0-1 probability scale: without
-    normalization a 0.99 (near-certain detection) was clamped down to the
-    category floor and silently failed the review gate.
+    LLMs intermittently answer in the 0-1 probability scale (e.g. 0.85, 0.99).
+    We only scale strictly fractional values in (0.0, 1.0).
+    An exact value of 1.0 is treated as 1% threat on the 0-100 scale,
+    preventing low-threat 1% violation verdicts from being inflated to 100% (ban-tier).
     """
-    if conf <= 1.0:
+    if 0.0 < conf < 1.0:
         return round(conf * 100, 2)
     return conf
+
 
 
 def _coerce_bool(value, default: bool = False) -> bool:

@@ -16,8 +16,10 @@ from services.gatekeeper.captcha_manager import CaptchaManager
 from services.reputation.cas import CASClient
 
 router = Router(name="joins_gatekeeper")
+_captcha_timeout_tasks: set[asyncio.Task] = set()
 
 # Default restricted permissions for unverified users
+
 RESTRICTED_PERMISSIONS = ChatPermissions(
     can_send_messages=False,
     can_send_media_messages=False,
@@ -109,7 +111,8 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
             )
 
             # Enforce the timeout: expired newcomers are kicked, not muted forever
-            asyncio.create_task(
+            # Retain a strong reference in _captcha_timeout_tasks so Python GC cannot prematurely collect the task
+            timeout_task = asyncio.create_task(
                 enforce_captcha_timeout(
                     bot=event.bot,
                     chat_id=chat.id,
@@ -118,6 +121,9 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
                     timeout_seconds=chat_db.captcha_timeout_seconds,
                 )
             )
+            _captcha_timeout_tasks.add(timeout_task)
+            timeout_task.add_done_callback(_captcha_timeout_tasks.discard)
+
 
         except Exception as err:
             logger.error(f"Failed to issue captcha for user {user.id}: {err}")

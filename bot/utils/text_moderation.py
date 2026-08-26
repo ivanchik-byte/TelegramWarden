@@ -102,8 +102,8 @@ async def moderate_text_content(
         return False
 
     mod_mode = chat_db.moderation_mode or 'ai_judge'
-    ban_threshold = chat_db.ai_confidence_threshold or 85.0
-    review_threshold = chat_db.ai_review_threshold or 50.0
+    ban_threshold = chat_db.ai_confidence_threshold if chat_db.ai_confidence_threshold is not None else 85.0
+    review_threshold = chat_db.ai_review_threshold if chat_db.ai_review_threshold is not None else 50.0
 
     if mod_mode == "strict_confidence":
         ban_threshold = max(ban_threshold, 95.0)
@@ -153,8 +153,10 @@ async def moderate_text_content(
         )
         return True
 
+    # 5. Execute action: delete message first, then apply punitive sanctions
     await SanctionsExecutor.delete_message(bot, chat_id, message.message_id)
 
+    # Custom category actions override default AI Judge behavior
     if custom_action == "delete":
         action_title = "Удаление сообщения"
         action_type = "delete"
@@ -180,7 +182,12 @@ async def moderate_text_content(
     else:
         # Autonomous AI Judge or Strategy Mode
         if mod_mode == "ai_judge":
-            if is_severe_contraband or verdict.suggested_action == SuggestedAction.BAN_USER:
+            # Safety gate: ban_user requires minimal confidence (review_threshold) to prevent low-confidence hallucinated instant bans
+            can_ban_in_ai_judge = (
+                is_severe_contraband
+                or (verdict.suggested_action == SuggestedAction.BAN_USER and verdict.confidence >= review_threshold)
+            )
+            if can_ban_in_ai_judge:
                 await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=f"{source_label}{verdict.reason}")
                 action_title = "Удаление + БАН (Вердикт ИИ-Судьи)"
                 action_type = "ban_user"
@@ -188,7 +195,7 @@ async def moderate_text_content(
                 await SanctionsExecutor.mute_user(
                     bot, session, chat_id, user_db,
                     duration_minutes=chat_db.warn_mute_duration_minutes or 1440,
-            reason=f"{source_label}{verdict.reason}",
+                    reason=f"{source_label}{verdict.reason}",
                 )
                 action_title = "Удаление + МУТ (Вердикт ИИ-Судьи)"
                 action_type = "mute_user"
