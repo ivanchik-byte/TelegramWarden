@@ -35,12 +35,12 @@ def test_telegram_username_extraction():
 
 def test_homoglyph_canonicalization():
     """Verify that Cyrillic lookalikes are mapped to canonical Latin characters."""
-    # Mixed string containing Cyrillic 'es' / 'a' and Latin characters
+    # Mixed string containing Cyrillic lookalikes alongside Latin letters
     mixed_text = "сaѕh"
-
     result = TextSanitizer.sanitize(mixed_text)
 
     # In canonical text, Cyrillic lookalikes should be normalized
+
     assert result.canonical_text.isascii()
 
 
