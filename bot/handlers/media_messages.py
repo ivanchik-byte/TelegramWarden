@@ -164,10 +164,11 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         return
 
     # 4. Caption text follows the exact same moderation policy as plain text.
-    # A caption hit does NOT skip the image scan: "порно + спам-каптион" must
+    # A caption hit does NOT skip the image scan: "nsfw media + spam caption" must
     # still reach the NSFW pipeline for logging and pHash registry, but duplicate
     # punitive sanctions on the same message must be avoided.
     caption_text = message.caption or ""
+
     caption_sanctioned = False
     if caption_text:
         caption_sanctioned = await moderate_text_content(

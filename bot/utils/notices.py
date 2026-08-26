@@ -54,7 +54,7 @@ async def send_admin_review_card(
     so admin review cards are never silently dropped.
     """
     admin_card_text = (
-        "🔍 <b>Спорное сообщение на проверку администраторам</b>\n\n"
+        " <b>Спорное сообщение на проверку администраторам</b>\n\n"
         f"• <b>Чат:</b> {chat_db.title or chat_db.chat_id}\n"
         f"• <b>От:</b> {user_name} (ID: <code>{user_id}</code>)\n"
         f"• <b>Содержимое:</b> <i>«{message_preview[:200]}»</i>\n"

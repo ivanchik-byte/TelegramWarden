@@ -165,7 +165,7 @@ async def handle_admin_ban_action(callback: CallbackQuery, session: AsyncSession
 
         admin_name = callback.from_user.first_name or f"Admin {admin_id}"
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.reply(text=f"⛔ Пользователь заблокирован администратором {admin_name}.")
+        await callback.message.reply(text=f" Пользователь заблокирован администратором {admin_name}.")
         await callback.answer(text="Пользователь забанен!")
         logger.info(f"Admin {admin_id} banned user {telegram_id} in {chat_id}")
     except Exception as err:
@@ -207,7 +207,7 @@ async def handle_admin_mute_action(callback: CallbackQuery, session: AsyncSessio
 
         admin_name = callback.from_user.first_name or f"Admin {admin_id}"
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.reply(text=f"🔇 Пользователь отправлен в мут администратором {admin_name}.")
+        await callback.message.reply(text=f" Пользователь отправлен в мут администратором {admin_name}.")
         await callback.answer(text="Пользователь замучен на 24 часа!")
         logger.info(f"Admin {admin_id} muted user {telegram_id} in {chat_id}")
     except Exception as err:
@@ -240,7 +240,7 @@ async def handle_admin_false_positive(callback: CallbackQuery, session: AsyncSes
 
         admin_name = callback.from_user.first_name or f"Admin {admin_id}"
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.reply(text=f"✅ Действие помечено как ложное срабатывание администратором {admin_name}.")
+        await callback.message.reply(text=f" Действие помечено как ложное срабатывание администратором {admin_name}.")
         await callback.answer(text="Отметка о ложном срабатывании сохранена для улучшения ИИ!")
         logger.info(f"Admin {admin_id} marked log {log_id} as false positive")
 

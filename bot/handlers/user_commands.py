@@ -21,16 +21,16 @@ def get_user_home_keyboard(bot_username: str, is_admin: bool = False, webapp_url
     """Generate main interactive home menu keyboard for users."""
     buttons = [
         [
-            InlineKeyboardButton(text="👤 Мой профиль", callback_data="user:profile"),
-            InlineKeyboardButton(text="📋 Мои предупреждения", callback_data="user:warns"),
+            InlineKeyboardButton(text=" Мой профиль", callback_data="user:profile"),
+            InlineKeyboardButton(text=" Мои предупреждения", callback_data="user:warns"),
         ],
         [
-            InlineKeyboardButton(text="📖 Правила и безопасность", callback_data="user:rules"),
-            InlineKeyboardButton(text="❓ Команды бота", callback_data="user:help"),
+            InlineKeyboardButton(text=" Правила и безопасность", callback_data="user:rules"),
+            InlineKeyboardButton(text=" Команды бота", callback_data="user:help"),
         ],
         [
             InlineKeyboardButton(
-                text="➕ Добавить бота в группу",
+                text=" Добавить бота в группу",
                 url=f"https://t.me/{bot_username}?startgroup=true&admin=change_info+delete_messages+restrict_members+invite_users+pin_messages",
             ),
         ],
@@ -39,7 +39,7 @@ def get_user_home_keyboard(bot_username: str, is_admin: bool = False, webapp_url
         from aiogram.types import WebAppInfo
         buttons.insert(0, [
             InlineKeyboardButton(
-                text="⚡ Открыть панель управления",
+                text=" Открыть панель управления",
                 web_app=WebAppInfo(url=webapp_url),
             )
         ])
@@ -97,12 +97,12 @@ async def handle_user_profile_callback(callback: CallbackQuery, session: AsyncSe
     )
     active_warns = res_active_warns.scalar() or 0
 
-    status_badge = "🟢 Отличная репутация" if active_warns == 0 else f"🟡 Есть активные предупреждения ({active_warns})"
+    status_badge = " Отличная репутация" if active_warns == 0 else f" Есть активные предупреждения ({active_warns})"
     if avg_rep < 50:
-        status_badge = "🔴 Высокий уровень риска"
+        status_badge = " Высокий уровень риска"
 
     profile_text = (
-        "<b>👤 Личный профиль участника</b>\n\n"
+        "<b> Личный профиль участника</b>\n\n"
         f"• <b>Имя:</b> {user_name}\n"
         f"• <b>Юзернейм:</b> {username_str}\n"
         f"• <b>Telegram ID:</b> <code>{user_id}</code>\n"
@@ -115,7 +115,7 @@ async def handle_user_profile_callback(callback: CallbackQuery, session: AsyncSe
 
     back_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📋 Мои предупреждения", callback_data="user:warns")],
+            [InlineKeyboardButton(text=" Мои предупреждения", callback_data="user:warns")],
             [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="user:home")],
         ]
     )
@@ -143,12 +143,12 @@ async def handle_user_warns_callback(callback: CallbackQuery, session: AsyncSess
 
     if not warn_rows:
         text = (
-            "<b>📋 Ваши предупреждения</b>\n\n"
-            "🎉 <b>У вас нет активных предупреждений!</b>\n\n"
+            "<b> Ваши предупреждения</b>\n\n"
+            " <b>У вас нет активных предупреждений!</b>\n\n"
             "Все ваши сообщения безопасны, репутация чистая."
         )
     else:
-        text = f"<b>📋 Ваши активные предупреждения ({len(warn_rows)}):</b>\n\n"
+        text = f"<b> Ваши активные предупреждения ({len(warn_rows)}):</b>\n\n"
         for idx, (w, ch) in enumerate(warn_rows, 1):
             date_str = w.created_at.strftime("%d.%m.%Y %H:%M") if w.created_at else "Недавно"
             exp_str = w.expires_at.strftime("%d.%m.%Y") if w.expires_at else "7 дней"
@@ -161,7 +161,7 @@ async def handle_user_warns_callback(callback: CallbackQuery, session: AsyncSess
 
     back_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👤 Мой профиль", callback_data="user:profile")],
+            [InlineKeyboardButton(text=" Мой профиль", callback_data="user:profile")],
             [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="user:home")],
         ]
     )
@@ -176,7 +176,7 @@ async def handle_user_rules_callback(callback: CallbackQuery) -> None:
         return
 
     text = (
-        "<b>📖 Правила общения и безопасность в чатах</b>\n\n"
+        "<b> Правила общения и безопасность в чатах</b>\n\n"
         "Чтобы не получать предупреждения и муты от бота:\n\n"
         "1. <b>Без спама и рекламы:</b> Не отправляйте несанкционированные ссылки на сторонние каналы и ботов.\n"
         "2. <b>Уважение к участникам:</b> Запрещены прямые оскорбления, травля и агрессивный мат в адрес людей.\n"
@@ -200,7 +200,7 @@ async def handle_user_help_callback(callback: CallbackQuery) -> None:
         return
 
     text = (
-        "<b>❓ Доступные команды бота:</b>\n\n"
+        "<b> Доступные команды бота:</b>\n\n"
         "<b>Для всех участников (в группах):</b>\n"
         "• <code>/me</code> или <code>/profile</code> — показать свой профиль и варны в этом чате\n"
         "• <code>/rules</code> — правила сообщества\n"
@@ -264,10 +264,10 @@ async def handle_in_chat_profile_command(message: Message, session: AsyncSession
         )
         active_warns = res_w.scalar() or 0
 
-    status = "🟢 Нарушений нет" if active_warns == 0 else f"⚠️ Предупреждений: {active_warns}/{warn_limit}"
+    status = " Нарушений нет" if active_warns == 0 else f"️ Предупреждений: {active_warns}/{warn_limit}"
 
     text = (
-        f"<b>👤 Профиль участника: {user_name}</b>\n\n"
+        f"<b> Профиль участника: {user_name}</b>\n\n"
         f"• <b>Статус:</b> {status}\n"
         f"• <b>Предупреждения:</b> <code>{active_warns} / {warn_limit}</code>\n"
         f"• <b>Рейтинг доверия:</b> <code>{rep_score}/100</code>\n"
@@ -282,7 +282,7 @@ async def handle_in_chat_rules_command(message: Message) -> None:
     if message.chat.id > 0:
         return
     text = (
-        "<b>📖 Правила сообщества</b>\n\n"
+        "<b> Правила сообщества</b>\n\n"
         "• Запрещены спам, несогласованная реклама и промо-ссылки.\n"
         "• Запрещены прямые оскорбления, травля и агрессивный мат.\n"
         "• Запрещены вредоносные ссылки, крипто-скам и 18+ контент.\n\n"
@@ -322,7 +322,7 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
 
     # MODE 1: Instant AI Verification
     if report_mode == "ai_instant":
-        status_msg = await message.reply("🔍 Жалоба принята. Проверяю сообщение через нейросеть...")
+        status_msg = await message.reply(" Жалоба принята. Проверяю сообщение через нейросеть...")
         raw_text = target_msg.text or target_msg.caption or ""
         sanitized = TextSanitizer.sanitize(raw_text)
 
@@ -362,7 +362,7 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
 
             await session.commit()
             await status_msg.edit_text(
-                f"✅ <b>Спасибо за жалобу, {reporter_name}!</b>\n\n"
+                f" <b>Спасибо за жалобу, {reporter_name}!</b>\n\n"
                 f"ИИ подтвердил нарушение (<code>{verdict.category.value}</code>, {verdict.confidence}%).\n"
                 f"Сообщение удалено, {sanction_text}."
             )
@@ -378,7 +378,7 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
     log_channel = chat_db.log_channel_id
 
     report_text = (
-        "🚨 <b>Жалоба на сообщение от участника</b>\n\n"
+        " <b>Жалоба на сообщение от участника</b>\n\n"
         f"• <b>Чат:</b> {message.chat.title or chat_id}\n"
         f"• <b>Автор жалобы:</b> {reporter_name} (ID: <code>{reporter.id if reporter else 0}</code>)\n"
         f"• <b>Нарушитель:</b> {target_name} (ID: <code>{target_id}</code>)\n"
@@ -389,15 +389,15 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🗑️ Удалить",
+                    text="️ Удалить",
                     callback_data=f"rep:del:{chat_id}:{target_msg.message_id}",
                 ),
                 InlineKeyboardButton(
-                    text="⚠️ Варн",
+                    text="️ Варн",
                     callback_data=f"rep:warn:{chat_id}:{target_id}",
                 ),
                 InlineKeyboardButton(
-                    text="⛔ Бан",
+                    text=" Бан",
                     callback_data=f"rep:ban:{chat_id}:{target_id}",
                 ),
             ]
@@ -407,10 +407,10 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
     if log_channel:
         try:
             await message.bot.send_message(chat_id=log_channel, text=report_text, reply_markup=report_kb)
-            await message.reply("✅ Жалоба успешно отправлена администраторам в журнал модерации.")
+            await message.reply(" Жалоба успешно отправлена администраторам в журнал модерации.")
             return
         except Exception:
             pass
 
-    await message.reply("✅ Жалоба принята. Администраторы уведомлены.", reply_markup=report_kb)
+    await message.reply(" Жалоба принята. Администраторы уведомлены.", reply_markup=report_kb)
 

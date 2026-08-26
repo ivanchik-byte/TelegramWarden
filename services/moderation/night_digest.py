@@ -62,7 +62,7 @@ async def process_chat_digest(bot, session, chat_db: Chat) -> None:
         f"• {name} (<code>{telegram_id}</code>) — {count} наруш." for telegram_id, name, count in rows
     )
     text = (
-        "🌅 <b>TelegramWarden | Итоги ночного режима</b>\n\n"
+        " <b>TelegramWarden | Итоги ночного режима</b>\n\n"
         f"За ночь отложено санкций: <b>{total}</b>\n{lines}\n\n"
         "<i>Карточки с кнопками разбана/бана отправлялись в чат по ходу нарушений. "
         "Проверьте их и примените санкции вручную.</i>"

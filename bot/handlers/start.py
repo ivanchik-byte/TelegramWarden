@@ -55,7 +55,7 @@ async def handle_start_command(message: Message, session: AsyncSession) -> None:
         from bot.handlers.user_commands import get_user_home_keyboard
         user_name = message.from_user.first_name if message.from_user else "Пользователь"
         text = (
-            f"👋 <b>Здравствуйте, {user_name}!</b>\n\n"
+            f" <b>Здравствуйте, {user_name}!</b>\n\n"
             "<b>TelegramWarden</b> — это система интеллектуальной защиты и модерации чатов.\n\n"
             "Здесь вы можете посмотреть свой личный профиль, статус предупреждений в группах и ознакомиться с правилами безопасности."
         )
@@ -153,7 +153,7 @@ async def handle_admin_chat_details(callback: CallbackQuery, session: AsyncSessi
         f"• <b>Ночной режим:</b> <b>{'ВКЛ' if chat_db.night_mode_enabled else 'ВЫКЛ'}</b> ({chat_db.night_mode_start} — {chat_db.night_mode_end} UTC)\n"
         f"• <b>Нейтрализовано угроз:</b> <b>{total_violations}</b>\n"
         f"• <b>Режим наказания:</b> <b>{chat_db.warn_punishment.upper()}</b>\n\n"
-        "💡 <i>Для просмотра интерактивных графиков, живой карты угроз и детальных логов откройте Mini App по кнопке ниже:</i>"
+        " <i>Для просмотра интерактивных графиков, живой карты угроз и детальных логов откройте Mini App по кнопке ниже:</i>"
     )
     keyboard = get_chat_details_keyboard(chat_db, settings.WEBAPP_URL)
     await callback.message.edit_text(text=text, reply_markup=keyboard)
@@ -357,8 +357,8 @@ async def handle_admin_whitelist_view(callback: CallbackQuery, session: AsyncSes
     superadmins = settings.superadmin_id_list
     text = (
         f"<b>Белый список и администраторы: {chat_db.title}</b>\n\n"
-        f"👑 <b>Глобальные супер-админы (.env):</b>\n<code>{', '.join(map(str, superadmins)) or 'Не заданы'}</code>\n\n"
-        f"👥 <b>Белый список этого чата ({len(wl)}):</b>\n<code>{', '.join(map(str, wl)) or 'Пуст'}</code>\n\n"
+        f" <b>Глобальные супер-админы (.env):</b>\n<code>{', '.join(map(str, superadmins)) or 'Не заданы'}</code>\n\n"
+        f" <b>Белый список этого чата ({len(wl)}):</b>\n<code>{', '.join(map(str, wl)) or 'Пуст'}</code>\n\n"
         "Пользователи из этих списков полностью обходят все проверки спама и капчу.\n\n"
         "<b>Команда для добавления по ID:</b> <code>/admin add &lt;ID&gt;</code>"
     )
