@@ -13,13 +13,13 @@ HIGH_RISK_TRIGGER_KEYWORDS = [
     "ставки", "раздач", "бесплатно", "схема", "мануал", "onlyfans", "18+",
     "цп", "cp", "дп", "csam", "меф", "соли", "закладк", "альфа-пвп", "докс", "деанон", "сват",
     "залив", "кардинг", "дамп", "куки", "логи", "курьер",
-    # Collapsed alias: separator-stripped form of DM requests (e.g. 'v.l.s.' -> 'vls')
+    # collapsed alias: separator-stripped form of DM requests ("v.l.s." -> "vls")
     "влс", "вличку",
     "crypt", "invest", "profit", "earn", "income", "free usdt", "giveaway"
 ]
 
 # Keywords matched with word boundaries regardless of length because their
-# plain-substring form collides with innocent words (e.g. short roots inside dictionary words).
+# plain-substring form collides with innocent words (e.g. root substring collisions).
 BOUNDARY_KEYWORDS = {"цп", "cp", "дп", "csam", "18+", "залив", "логи", "куки", "дамп", "дроп", "сват"}
 
 # Deterministic inspection cadence bounds: every Nth message from an
@@ -28,9 +28,9 @@ DEFAULT_SAMPLING_CADENCE = 10
 MIN_SAMPLING_CADENCE = 2
 MAX_SAMPLING_CADENCE = 100
 
-# Leetspeak and separator obfuscation patterns
-_LEET_TRANSLATION = str.maketrans({
+# Leetspeak and separator obfuscation (e.g. "airdr0p", "d.o.c.s")
 
+_LEET_TRANSLATION = str.maketrans({
     "0": "o", "1": "i", "3": "e", "4": "a", "5": "s",
     "6": "b", "7": "t", "8": "b", "9": "g",
     "@": "a", "$": "s",

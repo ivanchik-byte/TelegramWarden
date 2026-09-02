@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerabilities
+    url: https://github.com/ivanchik-byte/TelegramWarden/security/policy
+    about: Please report security vulnerabilities privately according to our security policy.
+  - name: Direct Contact (Telegram)
+    url: https://t.me/ivanchikbyte
+    about: Reach out directly to the maintainer on Telegram.
+  - name: Telegram Channel
+    url: https://t.me/ivanchik_byte
+    about: Project news, updates, and community discussions.
