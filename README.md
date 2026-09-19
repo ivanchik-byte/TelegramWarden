@@ -1,4 +1,4 @@
-# TelegramWarden
+# TelegramWarden 
 
 Интеллектуальная система защиты, модерации и администрирования Telegram-сообществ на базе гибридного анализа LLM (DeepSeek, Groq Llama), локальных ONNX нейросетей компьютерного зрения (Yahoo Open-NSFW) и полнофункциональной Telegram Mini App панели управления.
 
