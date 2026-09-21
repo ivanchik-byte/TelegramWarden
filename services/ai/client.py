@@ -130,6 +130,7 @@ class AIClientDispatcher:
             parsed_dict["suggested_action"] = action_key
 
         confidence_unknown = False
+        conf = 0.0
         try:
             conf = normalize_confidence(float(parsed_dict.get("confidence", 0.0)))
         except (TypeError, ValueError):

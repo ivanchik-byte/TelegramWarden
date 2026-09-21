@@ -22,7 +22,7 @@ class CaptchaManager:
         try:
             redis = await redis_manager.get_client()
             key = f"{REDIS_CAPTCHA_PREFIX}{chat_id}:{user_id}"
-            await redis.set(key, str(message_id), ex=timeout_seconds)
+            await redis.set(key, str(message_id), ex=timeout_seconds + 30)
             return True
         except Exception as err:
             logger.error(f"Failed to create captcha session: {err}")

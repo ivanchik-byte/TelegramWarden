@@ -19,6 +19,7 @@ from bot.keyboards.admin_panel import (
     get_chat_details_keyboard,
     get_chat_filters_keyboard,
     get_chat_whitelist_keyboard,
+    get_night_mode_config_keyboard,
     get_non_admin_keyboard,
 )
 from bot.utils.admin_checker import get_user_administered_chats, is_chat_admin, is_superadmin

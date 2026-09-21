@@ -69,7 +69,7 @@ async def send_admin_review_card(
             chat_id=target,
             text=admin_card_text,
             reply_markup=get_admin_log_keyboard(
-                chat_db.chat_id, user_id, audit_entry.id, is_ban_action=is_ban_action
+                chat_db.chat_id, user_id, audit_entry_id, is_ban_action=is_ban_action
             ),
         )
     except Exception as err:
