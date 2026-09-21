@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.admin_logs import get_admin_appeal_review_keyboard
+from html import escape as quote
 from bot.utils.admin_checker import is_chat_admin
 from core.config import settings
 from core.logger import logger
+from core.redis_client import redis_manager
 from models import AuditLog, Chat, User, Warn
 from services.ai.client import ai_dispatcher
 from services.ai.normalizer import TextSanitizer
@@ -38,15 +40,29 @@ async def handle_open_appeal_callback(callback: CallbackQuery, session: AsyncSes
         await callback.answer("Запись инцидента не найдена.", show_alert=True)
         return
 
+    if log_entry.chat_id != chat_id:
+        await callback.answer("Запись не относится к этому чату.", show_alert=True)
+        return
+
+    try:
+        redis = await redis_manager.get_client()
+        throttle_key = f"warden:appeal:{caller_id}:{log_id}"
+        if await redis.get(throttle_key):
+            await callback.answer("Апелляция уже отправлена. Повторите через час.", show_alert=True)
+            return
+        await redis.set(throttle_key, "1", ex=3600)
+    except Exception:
+        pass
+
     # Notify all superadmins in DM about the appeal
     caller_name = callback.from_user.full_name or callback.from_user.username or str(caller_id)
     appeal_text = (
         "<b>Новая апелляция на модерацию!</b>\n\n"
         f"• <b>Чат:</b> <code>{chat_id}</code>\n"
         f"• <b>Пользователь:</b> (ID: <code>{target_user_id}</code>)\n"
-        f"• <b>Податель апелляции:</b> {caller_name} (ID: <code>{caller_id}</code>)\n"
-        f"• <b>Причина санкции:</b> {log_entry.category} ({log_entry.confidence}%)\n"
-        f"• <b>Текст сообщения:</b>\n<i>{log_entry.raw_message_snippet or 'Медиа/текст'}</i>\n\n"
+        f"• <b>Податель апелляции:</b> {quote(caller_name)} (ID: <code>{caller_id}</code>)\n"
+        f"• <b>Причина санкции:</b> {quote(log_entry.category or '')} ({log_entry.confidence or 0}%)\n"
+        f"• <b>Текст сообщения:</b>\n<i>{quote(log_entry.raw_message_snippet or 'Медиа/текст')}</i>\n\n"
         "Выберите действие:"
     )
     review_kb = get_admin_appeal_review_keyboard(chat_id, target_user_id, log_id)
@@ -115,11 +131,21 @@ async def handle_appeal_accept(callback: CallbackQuery, session: AsyncSession) -
 @router.callback_query(F.data.startswith("appeal:reject:"))
 async def handle_appeal_reject(callback: CallbackQuery) -> None:
     """Admin rejects appeal: keep sanctions."""
+    parts = (callback.data or "").split(":")
+    if len(parts) != 5:
+        return
+    try:
+        chat_id = int(parts[2])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
+    if not await is_chat_admin(callback.bot, chat_id, admin_id):
+        await callback.answer("У вас нет прав для отклонения апелляций.", show_alert=True)
+        return
     admin_name = callback.from_user.full_name or callback.from_user.username or str(admin_id)
 
     await callback.message.edit_text(
-        f"<b>Апелляция ОТКЛОНЕНА администратором {admin_name}.</b>\n\nСанкции остаются в силе."
+        f"<b>Апелляция ОТКЛОНЕНА администратором {quote(admin_name)}.</b>\n\nСанкции остаются в силе."
     )
     await callback.answer("Апелляция отклонена.")
 

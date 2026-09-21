@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from aiogram import Bot
+from html import escape as quote
 from aiogram.types import ChatPermissions
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -158,7 +159,7 @@ class SanctionsExecutor:
                 name = user_db.first_name or f"User {user_db.telegram_id}"
                 await bot.send_message(
                     chat_id=chat_db.chat_id,
-                    text=f"Предупреждение для {name} [{active_warns_count}/{chat_db.warn_limit}]. Причина: {reason}",
+                    text=f"Предупреждение для {quote(name)} [{active_warns_count}/{chat_db.warn_limit}]. Причина: {quote(reason)}",
                 )
             except Exception as notify_err:
                 logger.debug(f"Failed to send warn notification: {notify_err}")
@@ -197,7 +198,7 @@ class SanctionsExecutor:
             name = user_db.first_name or f"User {user_db.telegram_id}"
             await bot.send_message(
                 chat_id=chat_id,
-                text=f"Пользователь {name} ограничен в отправке сообщений на {duration_minutes} минут. Причина: {reason}",
+                text=f"Пользователь {quote(name)} ограничен в отправке сообщений на {duration_minutes} минут. Причина: {quote(reason)}",
             )
         except Exception as notify_err:
             logger.debug(f"Failed to send mute notification: {notify_err}")
@@ -233,7 +234,7 @@ class SanctionsExecutor:
             name = user_db.first_name or f"User {user_db.telegram_id}"
             await bot.send_message(
                 chat_id=chat_id,
-                text=f"Пользователь {name} заблокирован. Причина: {reason}",
+                text=f"Пользователь {quote(name)} заблокирован. Причина: {quote(reason)}",
             )
         except Exception as notify_err:
             logger.debug(f"Failed to send ban notification: {notify_err}")

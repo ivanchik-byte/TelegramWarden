@@ -42,7 +42,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 COPY . .
 
 # Create logs directory
-RUN mkdir -p logs models_cache
+RUN mkdir -p logs models_cache && useradd -r app && chown -R app /app
+
+USER app
 
 EXPOSE 2009
 

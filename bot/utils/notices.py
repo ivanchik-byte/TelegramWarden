@@ -2,6 +2,8 @@
 
 from aiogram import Bot
 
+from html import escape as quote
+
 from core.logger import logger
 from bot.keyboards.admin_logs import get_admin_log_keyboard, get_group_moderation_keyboard
 
@@ -20,10 +22,10 @@ async def send_group_moderation_notice(
     """Post the public moderation card with an appeal button to the group."""
     notice_text = (
         "<b>TelegramWarden | Модерация</b>\n\n"
-        f"• <b>Пользователь:</b> {user_name} (ID: <code>{user_id}</code>)\n"
-        f"• <b>Действие:</b> <code>{action_title}</code>\n"
-        f"• <b>Причина:</b> {category} ({round(confidence)}%)\n"
-        f"• <b>Пояснение:</b> {reason}\n\n"
+        f"• <b>Пользователь:</b> {quote(user_name)} (ID: <code>{user_id}</code>)\n"
+        f"• <b>Действие:</b> <code>{quote(action_title)}</code>\n"
+        f"• <b>Причина:</b> {quote(category)} ({round(confidence)}%)\n"
+        f"• <b>Пояснение:</b> {quote(reason)}\n\n"
         "<i>Если вы не согласны с решением — нажмите кнопку ниже для подачи апелляции:</i>"
     )
     try:
@@ -55,11 +57,11 @@ async def send_admin_review_card(
     """
     admin_card_text = (
         " <b>Спорное сообщение на проверку администраторам</b>\n\n"
-        f"• <b>Чат:</b> {chat_db.title or chat_db.chat_id}\n"
-        f"• <b>От:</b> {user_name} (ID: <code>{user_id}</code>)\n"
-        f"• <b>Содержимое:</b> <i>«{message_preview[:200]}»</i>\n"
-        f"• <b>Оценка:</b> {category} ({int(confidence)}%)\n"
-        f"• <b>Причина:</b> {reason}\n\n"
+        f"• <b>Чат:</b> {quote(chat_db.title or str(chat_db.chat_id))}\n"
+        f"• <b>От:</b> {quote(user_name)} (ID: <code>{user_id}</code>)\n"
+        f"• <b>Содержимое:</b> <i>«{quote(message_preview[:200])}»</i>\n"
+        f"• <b>Оценка:</b> {quote(category)} ({int(confidence)}%)\n"
+        f"• <b>Причина:</b> {quote(reason)}\n\n"
         "<i>Выберите действие ниже:</i>"
     )
 

@@ -55,7 +55,8 @@ def validate_telegram_init_data(init_data_str: str, bot_token: str) -> Optional[
                 auth_date = int(parsed_params.get("auth_date", "0"))
             except ValueError:
                 return None
-            if auth_date <= 0 or time.time() - auth_date > MAX_INIT_DATA_AGE_SECONDS:
+            now = time.time()
+            if auth_date <= 0 or auth_date > now + 60 or now - auth_date > MAX_INIT_DATA_AGE_SECONDS:
                 logger.warning("Rejected initData with expired auth_date (possible replay)")
                 return None
 
