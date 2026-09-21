@@ -59,7 +59,7 @@ async def list_user_chats(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[ChatListItemSchema]:
     """Return all chats accessible to the authenticated user."""
-    result = await session.execute(select(Chat).order_by(Chat.title))
+    result = await session.execute(select(Chat).order_by(Chat.title).limit(500))
     all_chats = result.scalars().all()
 
     is_super = user.id in settings.superadmin_id_list

@@ -1,5 +1,6 @@
 """Admin and role-based access verification utilities."""
 
+import asyncio
 from typing import Optional
 from aiogram import Bot
 from sqlalchemy import select
@@ -68,14 +69,17 @@ async def get_user_administered_chats(
     if is_superadmin(user_id):
         return list(all_chats)
 
-    accessible_chats = []
-    for chat_db in all_chats:
-        # Check Telegram chat status (whitelist grants no admin privileges)
-        try:
-            member = await bot.get_chat_member(chat_id=chat_db.chat_id, user_id=user_id)
-            if member.status in ("creator", "administrator"):
-                accessible_chats.append(chat_db)
-        except Exception:
-            pass
+    semaphore = asyncio.Semaphore(5)
 
-    return accessible_chats
+    async def _is_admin(chat_db: Chat) -> Optional[Chat]:
+        async with semaphore:
+            try:
+                member = await bot.get_chat_member(chat_id=chat_db.chat_id, user_id=user_id)
+                if member.status in ("creator", "administrator"):
+                    return chat_db
+            except Exception:
+                pass
+        return None
+
+    checked = await asyncio.gather(*(_is_admin(chat_db) for chat_db in all_chats))
+    return [chat_db for chat_db in checked if chat_db is not None]

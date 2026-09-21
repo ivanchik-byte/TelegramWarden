@@ -1,5 +1,6 @@
 """Perceptual hashing and spam deduplication using Redis."""
 
+import asyncio
 import io
 from typing import Optional
 from PIL import Image
@@ -8,6 +9,22 @@ from core.redis_client import redis_manager
 from core.logger import logger
 
 REDIS_PHASH_KEY = "warden:spam_hashes"
+
+
+def _closest_match(target: str, candidates: list[str], max_distance: int) -> bool:
+    try:
+        needle = imagehash.hex_to_hash(target)
+    except ValueError:
+        return False
+    for raw in candidates:
+        try:
+            distance = needle - imagehash.hex_to_hash(raw)
+        except ValueError:
+            continue
+        if distance <= max_distance:
+            logger.info(f"pHash match found (distance: {distance}) against known spam {raw}")
+            return True
+    return False
 
 
 class PHashDeduplicator:
@@ -32,19 +49,11 @@ class PHashDeduplicator:
 
         try:
             redis = await redis_manager.get_client()
-            all_spam_hashes = await redis.smembers(REDIS_PHASH_KEY)
-            if not all_spam_hashes:
+            raw_hashes = await redis.smembers(REDIS_PHASH_KEY)
+            if not raw_hashes:
                 return False
-
-            target_hash = imagehash.hex_to_hash(phash_str)
-            for known_hash_hex in all_spam_hashes:
-                known_hash = imagehash.hex_to_hash(known_hash_hex)
-                distance = target_hash - known_hash
-                if distance <= max_distance:
-                    logger.info(f"pHash match found (distance: {distance}) against known spam {known_hash_hex}")
-                    return True
-
-            return False
+            candidates = [h.decode() if isinstance(h, bytes) else h for h in raw_hashes]
+            return await asyncio.to_thread(_closest_match, phash_str, candidates, max_distance)
         except Exception as err:
             logger.error(f"Error checking spam pHash in Redis: {err}")
             return False

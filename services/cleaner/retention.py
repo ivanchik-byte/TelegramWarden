@@ -42,9 +42,13 @@ class DataRetentionWorker:
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
         # Query old logs that still retain raw message text
-        stmt = select(AuditLog).where(
-            AuditLog.created_at <= cutoff_date,
-            AuditLog.raw_message_snippet.isnot(None),
+        stmt = (
+            select(AuditLog)
+            .where(
+                AuditLog.created_at <= cutoff_date,
+                AuditLog.raw_message_snippet.isnot(None),
+            )
+            .limit(2000)
         )
         result = await session.execute(stmt)
         old_logs = result.scalars().all()
