@@ -192,7 +192,10 @@ async def handle_admin_filter_toggle(callback: CallbackQuery, session: AsyncSess
     """Toggle individual feature on/off in database."""
     parts = callback.data.split(":")
     feature = parts[2]
-    chat_id = int(parts[3])
+    try:
+        chat_id = int(parts[3])
+    except ValueError:
+        return
     user_id = callback.from_user.id
 
     result = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
@@ -271,7 +274,10 @@ async def handle_admin_night_hour_adjust(callback: CallbackQuery, session: Async
     """Shift night mode start or end hour by +/- 1 hour."""
     parts = callback.data.split(":")
     action = parts[2]
-    chat_id = int(parts[3])
+    try:
+        chat_id = int(parts[3])
+    except ValueError:
+        return
     user_id = callback.from_user.id
 
     result = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
@@ -311,7 +317,10 @@ async def handle_admin_sensitivity_adjust(callback: CallbackQuery, session: Asyn
     """Adjust AI confidence threshold by +/- 5%."""
     parts = callback.data.split(":")
     action = parts[2]
-    chat_id = int(parts[3])
+    try:
+        chat_id = int(parts[3])
+    except ValueError:
+        return
     user_id = callback.from_user.id
 
     result = await session.execute(select(Chat).where(Chat.chat_id == chat_id))

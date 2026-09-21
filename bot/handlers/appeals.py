@@ -27,9 +27,12 @@ async def handle_open_appeal_callback(callback: CallbackQuery, session: AsyncSes
     if len(parts) != 5:
         return
 
-    chat_id = int(parts[2])
-    target_user_id = int(parts[3])
-    log_id = int(parts[4])
+    try:
+        chat_id = int(parts[2])
+        target_user_id = int(parts[3])
+        log_id = int(parts[4])
+    except ValueError:
+        return
     caller_id = callback.from_user.id
 
     # Fetch audit log entry
@@ -95,9 +98,12 @@ async def handle_open_appeal_callback(callback: CallbackQuery, session: AsyncSes
 async def handle_appeal_accept(callback: CallbackQuery, session: AsyncSession) -> None:
     """Admin approves appeal: unban/unwarn user and restore reputation."""
     parts = callback.data.split(":")
-    chat_id = int(parts[2])
-    target_user_id = int(parts[3])
-    log_id = int(parts[4])
+    try:
+        chat_id = int(parts[2])
+        target_user_id = int(parts[3])
+        log_id = int(parts[4])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     has_rights = await is_chat_admin(callback.bot, chat_id, admin_id)
@@ -115,9 +121,20 @@ async def handle_appeal_accept(callback: CallbackQuery, session: AsyncSession) -
     u_res = await session.execute(select(User).where(User.telegram_id == target_user_id, User.chat_id == chat_id))
     user_db = u_res.scalar_one_or_none()
     if user_db:
-        warns = (await session.execute(select(Warn).where(Warn.user_id == user_db.id, Warn.chat_id == chat_id))).scalars().all()
+        warns = (
+            await session.execute(
+                select(Warn).where(
+                    Warn.user_id == user_db.id,
+                    Warn.chat_id == chat_id,
+                    Warn.is_active == True,  # noqa: E712
+                )
+            )
+        ).scalars().all()
         for w in warns:
             await session.delete(w)
+        user_db.is_banned = False
+        user_db.is_muted = False
+        user_db.muted_until = None
         await session.commit()
 
     admin_name = callback.from_user.full_name or callback.from_user.username or str(admin_id)

@@ -20,6 +20,11 @@ from services.ai.schema import SuggestedAction, ViolationCategory
 from services.moderation.night_mode import is_night_mode_active
 
 
+def _slice_utf16(text: str, offset: int, length: int) -> str:
+    raw = text.encode("utf-16-le")
+    return raw[offset * 2:(offset + length) * 2].decode("utf-16-le", errors="ignore")
+
+
 def extract_entity_urls(message: Message) -> list[str]:
     """Extract URLs hidden in Telegram formatting entities.
 
@@ -31,7 +36,7 @@ def extract_entity_urls(message: Message) -> list[str]:
     for entity in list(message.entities or []) + list(message.caption_entities or []):
         found: str | None = None
         if entity.type == "url":
-            found = source_text[entity.offset:entity.offset + entity.length]
+            found = _slice_utf16(source_text, entity.offset, entity.length)
         elif entity.type == "text_link" and entity.url:
             found = entity.url
         if found and found not in urls:

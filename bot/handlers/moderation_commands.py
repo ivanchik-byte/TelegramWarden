@@ -423,8 +423,11 @@ async def handle_report_delete_callback(callback: CallbackQuery, session: AsyncS
     parts = callback.data.split(":")
     if len(parts) != 4:
         return
-    chat_id = int(parts[2])
-    msg_id = int(parts[3])
+    try:
+        chat_id = int(parts[2])
+        msg_id = int(parts[3])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
@@ -445,8 +448,11 @@ async def handle_report_warn_callback(callback: CallbackQuery, session: AsyncSes
     parts = callback.data.split(":")
     if len(parts) != 4:
         return
-    chat_id = int(parts[2])
-    target_id = int(parts[3])
+    try:
+        chat_id = int(parts[2])
+        target_id = int(parts[3])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
@@ -477,8 +483,11 @@ async def handle_report_ban_callback(callback: CallbackQuery, session: AsyncSess
     parts = callback.data.split(":")
     if len(parts) != 4:
         return
-    chat_id = int(parts[2])
-    target_id = int(parts[3])
+    try:
+        chat_id = int(parts[2])
+        target_id = int(parts[3])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))

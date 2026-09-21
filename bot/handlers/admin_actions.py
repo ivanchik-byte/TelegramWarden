@@ -41,9 +41,12 @@ async def handle_admin_unban(callback: CallbackQuery, session: AsyncSession) -> 
     if len(parts) != 5:
         return
 
-    chat_id = int(parts[2])
-    telegram_id = int(parts[3])
-    log_id = int(parts[4])
+    try:
+        chat_id = int(parts[2])
+        telegram_id = int(parts[3])
+        log_id = int(parts[4])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     if not await ensure_admin(callback, session, chat_id):
@@ -90,9 +93,12 @@ async def handle_admin_unwarn(callback: CallbackQuery, session: AsyncSession) ->
     if len(parts) != 5:
         return
 
-    chat_id = int(parts[2])
-    telegram_id = int(parts[3])
-    log_id = int(parts[4])
+    try:
+        chat_id = int(parts[2])
+        telegram_id = int(parts[3])
+        log_id = int(parts[4])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     if not await ensure_admin(callback, session, chat_id):
@@ -141,9 +147,12 @@ async def handle_admin_ban_action(callback: CallbackQuery, session: AsyncSession
     if len(parts) != 5:
         return
 
-    chat_id = int(parts[2])
-    telegram_id = int(parts[3])
-    log_id = int(parts[4])
+    try:
+        chat_id = int(parts[2])
+        telegram_id = int(parts[3])
+        log_id = int(parts[4])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     if not await ensure_admin(callback, session, chat_id):
@@ -183,9 +192,12 @@ async def handle_admin_mute_action(callback: CallbackQuery, session: AsyncSessio
     if len(parts) != 5:
         return
 
-    chat_id = int(parts[2])
-    telegram_id = int(parts[3])
-    log_id = int(parts[4])
+    try:
+        chat_id = int(parts[2])
+        telegram_id = int(parts[3])
+        log_id = int(parts[4])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     if not await ensure_admin(callback, session, chat_id):
@@ -225,7 +237,10 @@ async def handle_admin_false_positive(callback: CallbackQuery, session: AsyncSes
     if len(parts) != 3:
         return
 
-    log_id = int(parts[2])
+    try:
+        log_id = int(parts[2])
+    except ValueError:
+        return
     admin_id = callback.from_user.id
 
     try:

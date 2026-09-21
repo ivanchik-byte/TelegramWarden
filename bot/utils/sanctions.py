@@ -135,7 +135,11 @@ class SanctionsExecutor:
 
             # Deactivate used warns
             warns_to_deactivate = await session.execute(
-                select(Warn).where(Warn.user_id == user_db.id, Warn.chat_id == chat_db.chat_id)
+                select(Warn).where(
+                    Warn.user_id == user_db.id,
+                    Warn.chat_id == chat_db.chat_id,
+                    Warn.is_active == True,  # noqa: E712
+                )
             )
             for w in warns_to_deactivate.scalars():
                 w.is_active = False

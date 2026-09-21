@@ -54,7 +54,7 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
     if not chat_db:
         chat_db = Chat(chat_id=chat.id, title=chat.title or "Group")
         session.add(chat_db)
-        await session.commit()
+        await session.flush()
 
     # 2. Check CAS Database if enabled
     if chat_db.cas_check_enabled:
@@ -162,7 +162,10 @@ async def handle_captcha_callback(callback: CallbackQuery, session: AsyncSession
     if len(data_parts) != 3:
         return
 
-    target_user_id = int(data_parts[2])
+    try:
+        target_user_id = int(data_parts[2])
+    except ValueError:
+        return
     clicker_user_id = callback.from_user.id
     chat_id = callback.message.chat.id
 
