@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     FALLBACK_BASE_URL: str = Field(default="https://api.groq.com/openai/v1")
     FALLBACK_MODEL: str = Field(default="llama-3.3-70b-versatile")
 
+    # Tier-1 fast triage (TypeSafe Jev, System One). Off unless explicitly
+    # enabled with a key: without it the dispatcher calls DeepSeek directly.
+    JEV_ENABLED: bool = Field(default=False)
+    TYPESAFE_API_KEY: Optional[str] = Field(default=None)
+    JEV_BASE_URL: str = Field(default="https://api.typesafe.ai")
+    JEV_MODEL: str = Field(default="jev-1.13.0")
+    JEV_FAST_PASS_THRESHOLD: float = Field(default=0.03, ge=0.0, le=1.0)
+    JEV_TIMEOUT_SECONDS: float = Field(default=2.5, ge=0.5, le=10.0)
+    JEV_MAX_CONCURRENT: int = Field(default=10, ge=1, le=50)
+
     # PostgreSQL Database
     POSTGRES_USER: str = Field(default="warden_user")
     POSTGRES_PASSWORD: str = Field(default="warden_secure_password")

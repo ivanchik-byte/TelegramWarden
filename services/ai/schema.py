@@ -1,6 +1,7 @@
 """Pydantic schemas and enums for structured AI moderation verdicts."""
 
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -51,4 +52,12 @@ class AIModerationVerdict(BaseModel):
     fail_open: bool = Field(
         default=False,
         description="True only for the synthetic verdict emitted when every provider failed.",
+    )
+    triaged_by_jev: bool = Field(
+        default=False,
+        description="True when Tier-1 Jev triaged this verdict (fast-pass or hinted escalation).",
+    )
+    jev_latency_ms: Optional[float] = Field(
+        default=None,
+        description="Jev triage round-trip in milliseconds, when triaged_by_jev is True.",
     )
