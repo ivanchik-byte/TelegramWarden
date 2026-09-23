@@ -1,29 +1,16 @@
 """API routes for moderation statistics and audit log views."""
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import TelegramUser, get_current_telegram_user
+from api.deps import verify_chat_access
 from api.schemas import AuditLogItemSchema, CategoryStatItem, ChatStatsResponseSchema
-from core.config import settings
 from core.database import get_db_session
-from models import AuditLog, Chat, Warn
+from models import AuditLog, Warn
 
 router = APIRouter(prefix="/stats", tags=["Stats"])
-
-
-async def _verify_chat_access(chat_id: int, user_id: int, session: AsyncSession) -> None:
-    """Verify that user is superadmin or in chat's whitelist."""
-    if user_id in settings.superadmin_id_list:
-        return
-    res = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res.scalar_one_or_none()
-    if not chat_db or user_id not in (chat_db.whitelisted_users or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: you do not have permission to view stats for this chat",
-        )
 
 
 @router.get("/{chat_id}", response_model=ChatStatsResponseSchema)
@@ -33,7 +20,7 @@ async def get_chat_statistics(
     session: AsyncSession = Depends(get_db_session),
 ) -> ChatStatsResponseSchema:
     """Get aggregated moderation metrics and category breakdown."""
-    await _verify_chat_access(chat_id, user.id, session)
+    await verify_chat_access(chat_id, user.id, session)
 
     # 1. Total violations count
     total_viol_res = await session.execute(
@@ -101,7 +88,7 @@ async def get_recent_audit_logs(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[AuditLogItemSchema]:
     """Get paginated recent moderation events."""
-    await _verify_chat_access(chat_id, user.id, session)
+    await verify_chat_access(chat_id, user.id, session)
 
     stmt = (
         select(AuditLog)

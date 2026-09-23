@@ -96,6 +96,14 @@ class Settings(BaseSettings):
             problems.append("BOT_TOKEN is not configured (still default)")
         if self.SECRET_KEY == fields["SECRET_KEY"].default:
             problems.append("SECRET_KEY is not configured (still default)")
+        if self.DEEPSEEK_API_KEY == fields["DEEPSEEK_API_KEY"].default:
+            problems.append("DEEPSEEK_API_KEY is not configured (still default)")
+        db_password_default = self.POSTGRES_PASSWORD == fields["POSTGRES_PASSWORD"].default
+        db_url_leaks_default = bool(
+            self.DATABASE_URL and "warden_secure_password" in self.DATABASE_URL
+        )
+        if db_password_default or db_url_leaks_default:
+            problems.append("POSTGRES_PASSWORD is not configured (still default)")
         if problems:
             raise RuntimeError(
                 "Refusing to start TelegramWarden with insecure defaults: "

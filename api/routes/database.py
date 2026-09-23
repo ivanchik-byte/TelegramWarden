@@ -2,23 +2,14 @@
 
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import TelegramUser, get_current_telegram_user
-from core.config import settings
+from api.deps import require_superadmin
 from core.database import get_db_session
 from models import AuditLog, Chat, User, Warn
 
 router = APIRouter(prefix="/database", tags=["Database Explorer"])
-
-
-def _check_superadmin(user: TelegramUser) -> None:
-    """Verify that user is a configured superadmin."""
-    if user.id not in settings.superadmin_id_list:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Database explorer is restricted to SuperAdmins",
-        )
 
 
 @router.get("/tables")
@@ -27,7 +18,7 @@ async def list_database_tables(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[dict[str, Any]]:
     """List all database tables with total row counts and column schemas."""
-    _check_superadmin(user)
+    require_superadmin(user)
 
     tables_info = [
         {
@@ -130,7 +121,7 @@ async def get_table_records(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Retrieve records from specified database table with pagination."""
-    _check_superadmin(user)
+    require_superadmin(user)
 
     table_map = {
         "chats": Chat,

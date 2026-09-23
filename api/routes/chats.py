@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import TelegramUser, get_current_telegram_user
+from api.deps import can_access_chat, is_superadmin
 from api.schemas import ChatListItemSchema, ChatSettingsResponseSchema, ChatSettingsUpdateSchema
-from core.config import settings
 from core.database import get_db_session
 from models import Chat
 
@@ -62,19 +62,15 @@ async def list_user_chats(
     result = await session.execute(select(Chat).order_by(Chat.title).limit(500))
     all_chats = result.scalars().all()
 
-    is_super = user.id in settings.superadmin_id_list
-    accessible = []
-    for chat in all_chats:
-        wl = chat.whitelisted_users or []
-        if is_super or user.id in wl:
-            accessible.append(
-                ChatListItemSchema(
-                    chat_id=chat.chat_id,
-                    title=chat.title,
-                    is_active=chat.is_active,
-                )
-            )
-    return accessible
+    return [
+        ChatListItemSchema(
+            chat_id=chat.chat_id,
+            title=chat.title,
+            is_active=chat.is_active,
+        )
+        for chat in all_chats
+        if can_access_chat(user.id, chat.whitelisted_users)
+    ]
 
 
 @router.get("/{chat_id}", response_model=ChatSettingsResponseSchema)
@@ -93,9 +89,7 @@ async def get_chat_settings(
             detail="Chat not found in database",
         )
 
-    is_super = user.id in settings.superadmin_id_list
-    is_whitelisted = user.id in (chat_db.whitelisted_users or [])
-    if not (is_super or is_whitelisted):
+    if not can_access_chat(user.id, chat_db.whitelisted_users):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: you do not have permission to view this chat",
@@ -121,9 +115,7 @@ async def update_chat_settings(
             detail="Chat not found",
         )
 
-    is_super = user.id in settings.superadmin_id_list
-    is_whitelisted = user.id in (chat_db.whitelisted_users or [])
-    if not (is_super or is_whitelisted):
+    if not can_access_chat(user.id, chat_db.whitelisted_users):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: you do not have permission to manage this chat",
@@ -143,7 +135,7 @@ async def update_chat_settings(
         "media_ocr_filter_enabled",
     }
     forbidden = (privileged_fields | defense_fields).intersection(update_data)
-    if not is_super and forbidden:
+    if not is_superadmin(user.id) and forbidden:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Only superadmins may modify: {', '.join(sorted(forbidden))}",
