@@ -116,8 +116,11 @@ flowchart TD
     RiskEngine -->|Подозрение >= 15%| MediaOrText{Тип контента}
     
     MediaOrText -->|Медиа / Стикеропоток| CVFilter[Локальный CV конвейер\npHash + QR + ONNX NSFW 12ms]
-    MediaOrText -->|Текст / Подпись| LLMPrimary[3. DeepSeek Chat]
-    
+    MediaOrText -->|Текст / Подпись| JevTriage[3. Jev Tier-1 triage\nSystem One, ~150-400 мс]
+
+    JevTriage -->|Чисто < 3%| JevPass[Fast-Pass без LLM]
+    JevTriage -->|Сбой / Подозрение| LLMPrimary[4. DeepSeek Chat]
+
     LLMPrimary -->|Ошибка / Таймаут| LLMFallback[Резерв: Groq Llama 3.3 70B]
     LLMPrimary -->|Успех| VerdictCalibrator[Калибровка уверенности]
     LLMFallback --> VerdictCalibrator
@@ -143,6 +146,7 @@ flowchart TD
 - Либо Python 3.12+, PostgreSQL 16+, Redis 7+
 - Токен Telegram-бота (от @BotFather)
 - API-ключ DeepSeek или Groq API
+- (Опционально) API-ключ TypeSafe Jev (`TYPESAFE_API_KEY`) для Tier-1 triage; без него бот работает как раньше, напрямую через DeepSeek
 
 ---
 
@@ -269,6 +273,10 @@ python -m bot.main
 | `DEEPSEEK_BASE_URL`| Нет | Базовый URL DeepSeek API | `https://api.deepseek.com` |
 | `FALLBACK_AI_ENABLED`| Нет | Включение резервного LLM провайдера | `true` |
 | `FALLBACK_API_KEY`| Нет | API ключ Groq для резервного анализа Llama 3.3 | `gsk_xxxxxxxxxxxxxxxxx` |
+| `JEV_ENABLED`| Нет | Tier-1 triage через TypeSafe Jev (без ключа не включается) | `false` |
+| `TYPESAFE_API_KEY`| Нет | API ключ TypeSafe для Jev triage | `ts-xxxxxxxxxxxxxxxx` |
+| `JEV_MODEL`| Нет | Зафиксированная версия модели (пороги калибруются под версию) | `jev-1.13.0` |
+| `JEV_FAST_PASS_THRESHOLD`| Нет | Порог fast-pass чистых (консервативно до калибровки) | `0.03` |
 | `WEBAPP_URL` | Да | Публичный HTTPS URL панели управления | `https://your-domain.com/app` |
 | `CLOUDFLARE_TUNNEL_TOKEN`| Нет | Токен постоянного бесплатного Cloudflare Tunnel | `eyJhIjoi...` |
 | `POSTGRES_USER` | Да | Пользователь базы данных PostgreSQL | `warden_user` |
