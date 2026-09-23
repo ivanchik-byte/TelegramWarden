@@ -93,10 +93,15 @@ async def moderate_text_content(
         user_info=user_context,
         cache_chat_id=chat_id,
         cache_user_id=user_id,
+        jev_prefilter=getattr(chat_db, "enable_jev_prefilter", True),
+        has_hidden_entities=bool(hidden_urls),
     )
 
     if not verdict.is_violation:
         return False
+
+    if verdict.triaged_by_jev:
+        source_label = f"{source_label}[Jev+LLM] "
 
     cat_key = verdict.category.value
     category_actions = chat_db.category_actions or {}
