@@ -128,15 +128,21 @@ async def test_get_and_patch_chat_settings(db_session: AsyncSession):
         assert data["title"] == "API Managed Community"
         assert data["ai_confidence_threshold"] == 80.0
 
-        # 2. PATCH Settings
+        # 2. PATCH allowed field
         res_patch = await client.patch(
             "/api/chats/-100654321",
-            json={"ai_confidence_threshold": 92.5, "clean_service_messages": True},
+            json={"clean_service_messages": True},
         )
         assert res_patch.status_code == 200
         patched_data = res_patch.json()
-        assert patched_data["ai_confidence_threshold"] == 92.5
         assert patched_data["clean_service_messages"] is True
+
+        # 3. PATCH defense field as whitelisted (non-superadmin) -> 403
+        res_forbidden = await client.patch(
+            "/api/chats/-100654321",
+            json={"ai_confidence_threshold": 92.5},
+        )
+        assert res_forbidden.status_code == 403
 
     app.dependency_overrides.clear()
 

@@ -133,6 +133,8 @@ async def update_chat_settings(
         "cas_check_enabled", "is_active", "full_scan_enabled",
         "media_nsfw_filter_enabled", "media_qr_filter_enabled",
         "media_ocr_filter_enabled",
+        "moderation_mode", "category_actions",
+        "ai_confidence_threshold", "ai_review_threshold", "ai_sampling_rate",
     }
     forbidden = (privileged_fields | defense_fields).intersection(update_data)
     if not is_superadmin(user.id) and forbidden:

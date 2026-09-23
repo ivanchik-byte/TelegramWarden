@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime, timedelta, timezone
+from html import escape as quote
 from typing import Optional, Tuple
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -107,14 +108,14 @@ async def handle_manual_warn_command(message: Message, session: AsyncSession) ->
     session.add(audit_entry)
     await session.commit()
 
-    admin_name = admin_user.first_name if admin_user else f"Admin {admin_id}"
-    target_name = target_user.first_name or f"ID {target_user.id}"
+    admin_name = quote(admin_user.first_name) if admin_user else f"Admin {admin_id}"
+    target_name = quote(target_user.first_name) if target_user.first_name else f"ID {target_user.id}"
 
     text = (
         "️ <b>Выдано предупреждение</b>\n\n"
         f"• <b>Пользователь:</b> {target_name} (ID: <code>{target_user.id}</code>)\n"
         f"• <b>Администратор:</b> {admin_name}\n"
-        f"• <b>Причина:</b> {reason}\n"
+        f"• <b>Причина:</b> {quote(reason)}\n"
         f"• <b>Предупреждений:</b> <code>{active_count} / {chat_db.warn_limit}</code>\n"
         f"• <b>Срок действия:</b> {chat_db.warn_expiration_days} дней"
     )
@@ -166,8 +167,8 @@ async def handle_manual_unwarn_command(message: Message, session: AsyncSession) 
     user_db.reputation_score = min(100, user_db.reputation_score + 15)
     await session.commit()
 
-    admin_name = message.from_user.first_name if message.from_user else "Admin"
-    await message.reply(f" Предупреждение для {target_user.first_name} успешно снято администратором {admin_name}.")
+    admin_name = quote(message.from_user.first_name) if message.from_user else "Admin"
+    await message.reply(f" Предупреждение для {quote(target_user.first_name)} успешно снято администратором {admin_name}.")
 
 
 @router.message(Command("clearwarns"))
@@ -206,7 +207,7 @@ async def handle_clear_warns_command(message: Message, session: AsyncSession) ->
 
     user_db.reputation_score = 100
     await session.commit()
-    await message.reply(f" Все активные предупреждения ({len(warns)}) для {target_user.first_name} успешно очищены!")
+    await message.reply(f" Все активные предупреждения ({len(warns)}) для {quote(target_user.first_name)} успешно очищены!")
 
 
 @router.message(Command("mute"))
@@ -263,18 +264,18 @@ async def handle_manual_mute_command(message: Message, session: AsyncSession) ->
     )
     await session.commit()
 
-    admin_name = message.from_user.first_name if message.from_user else "Admin"
+    admin_name = quote(message.from_user.first_name) if message.from_user else "Admin"
     if not mute_applied:
         await message.reply(
-            f"️ <b>Не удалось замутить {target_user.first_name}</b> — проверьте права бота "
+            f"️ <b>Не удалось замутить {quote(target_user.first_name)}</b> — проверьте права бота "
             f"(бот должен быть администратором с правом ограничивать участников)."
         )
         return
 
     await message.reply(
-        f" <b>Пользователь {target_user.first_name} отправлен в мут</b>\n\n"
+        f" <b>Пользователь {quote(target_user.first_name)} отправлен в мут</b>\n\n"
         f"• <b>Длительность:</b> {duration_minutes} мин.\n"
-        f"• <b>Причина:</b> {reason}\n"
+        f"• <b>Причина:</b> {quote(reason)}\n"
         f"• <b>Администратор:</b> {admin_name}"
     )
 
@@ -314,7 +315,7 @@ async def handle_manual_unmute_command(message: Message, session: AsyncSession) 
             user_db.muted_until = None
             await session.commit()
 
-        await message.reply(f" Пользователь {target_user.first_name} успешно размучен!")
+        await message.reply(f" Пользователь {quote(target_user.first_name)} успешно размучен!")
     except Exception as err:
         logger.error(f"Failed to unmute user: {err}")
         await message.reply("Ошибка при снятии мута.")
@@ -363,17 +364,17 @@ async def handle_manual_ban_command(message: Message, session: AsyncSession) -> 
     )
     await session.commit()
 
-    admin_name = message.from_user.first_name if message.from_user else "Admin"
+    admin_name = quote(message.from_user.first_name) if message.from_user else "Admin"
     if not ban_applied:
         await message.reply(
-            f"️ <b>Не удалось забанить {target_user.first_name}</b> — проверьте права бота "
+            f"️ <b>Не удалось забанить {quote(target_user.first_name)}</b> — проверьте права бота "
             f"(бот должен быть администратором с правом блокировать участников)."
         )
         return
 
     await message.reply(
-        f" <b>Пользователь {target_user.first_name} заблокирован</b>\n\n"
-        f"• <b>Причина:</b> {reason}\n"
+        f" <b>Пользователь {quote(target_user.first_name)} заблокирован</b>\n\n"
+        f"• <b>Причина:</b> {quote(reason)}\n"
         f"• <b>Администратор:</b> {admin_name}"
     )
 
@@ -437,7 +438,7 @@ async def handle_report_delete_callback(callback: CallbackQuery, session: AsyncS
         return
 
     await SanctionsExecutor.delete_message(callback.bot, chat_id, msg_id)
-    admin_name = callback.from_user.first_name or f"Admin {admin_id}"
+    admin_name = quote(callback.from_user.first_name) if callback.from_user.first_name else f"Admin {admin_id}"
     await callback.message.edit_text(f"️ Сообщение удалено администратором {admin_name}.")
     await callback.answer("Сообщение удалено!")
 
@@ -472,7 +473,7 @@ async def handle_report_warn_callback(callback: CallbackQuery, session: AsyncSes
     )
     await session.commit()
 
-    admin_name = callback.from_user.first_name or f"Admin {admin_id}"
+    admin_name = quote(callback.from_user.first_name) if callback.from_user.first_name else f"Admin {admin_id}"
     await callback.message.edit_text(f"️ Пользователю {target_id} выдан варн ({active_count}/{chat_db.warn_limit}) администратором {admin_name}.")
     await callback.answer("Варн выдан!")
 
@@ -504,7 +505,7 @@ async def handle_report_ban_callback(callback: CallbackQuery, session: AsyncSess
         await SanctionsExecutor.ban_user(callback.bot, session, chat_id, user_db, reason="Бан по жалобе участников")
         await session.commit()
 
-    admin_name = callback.from_user.first_name or f"Admin {admin_id}"
+    admin_name = quote(callback.from_user.first_name) if callback.from_user.first_name else f"Admin {admin_id}"
     await callback.message.edit_text(f" Пользователь {target_id} забанен администратором {admin_name}.")
     await callback.answer("Пользователь забанен!")
 
