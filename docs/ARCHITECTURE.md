@@ -50,25 +50,38 @@ TelegramWarden/
 │   │   ├── database.py         # Инспектор базы данных (Superadmin Explorer)
 │   │   └── stats.py            # Аналитика, статистика и аудит-лог
 │   ├── auth.py                 # Валидация HMAC-SHA256 initData с защитой от Replay-атак
+│   ├── deps.py                 # Общие проверки доступа (superadmin / whitelist чата)
 │   ├── main.py                 # Инициализация FastAPI приложения и статики
 │   └── schemas.py              # Pydantic схемы запросов и ответов
 │
 ├── bot/                        # Логика Telegram-бота
 │   ├── handlers/
 │   │   ├── admin_actions.py    # Обработка действий администраторов (RBAC проверка)
+│   │   ├── admin_management.py # Управление составом админов и whitelist
 │   │   ├── appeals.py          # Система обжалования санкций нарушителями
+│   │   ├── edited_messages.py  # Перепроверка отредактированных сообщений
 │   │   ├── joins.py            # Капча при входе с автотаймаутом и анти-рейд модуль
 │   │   ├── media_messages.py   # Конвейер модерации медиа, стикеров и видео
 │   │   ├── moderation_commands.py # Ручные админ-команды (/warn, /mute, /ban, /settings)
+│   │   ├── service_cleanup.py  # Чистка сервисных сообщений
+│   │   ├── settings.py         # Просмотр настроек чата
 │   │   ├── start.py            # Личный кабинет, привязка чатов, справка
 │   │   ├── text_messages.py    # Анализ входящих текстовых сообщений
 │   │   └── user_commands.py    # Пользовательские команды (/me, /report, /profile, /rules)
 │   ├── keyboards/              # Клавиатуры и интерактивные кнопки
-│   ├── middlewares/            # Rate limiting, инъекция сессий БД, аутентификация
+│   │   ├── admin_logs.py       # Кнопки журнала аудита
+│   │   ├── admin_panel.py      # Кнопки админ-панели
+│   │   ├── captcha.py          # Кнопки капчи
+│   │   └── settings.py         # Кнопки настроек чата
+│   ├── middlewares/            # Rate limiting, инъекция сессий БД
+│   │   ├── db_session.py       # Сессия БД на апдейт
+│   │   └── rate_limit.py       # Антифлуд на сообщения и эдиты
 │   ├── utils/
 │   │   ├── admin_checker.py    # Проверка прав администраторов и суперадминов
-│   │   ├── night_mode.py       # Расчет окон тишины с учетом часовых поясов
-│   │   └── sanctions.py        # Исполнитель санкций (удаление, варн, мут, бан)
+│   │   ├── guards.py           # Базовые гарды источника сообщения
+│   │   ├── notices.py          # Карточки уведомлений о санкциях
+│   │   ├── sanctions.py        # Исполнитель санкций (удаление, варн, мут, бан)
+│   │   └── text_moderation.py  # Единый конвейер текстовой модерации
 │   └── main.py                 # Единая точка входа (Бот + API сервер + Scheduler)
 │
 ├── core/                       # Ядро системы
@@ -82,7 +95,8 @@ TelegramWarden/
 │   └── ARCHITECTURE.md         # Описание архитектуры системы
 │
 ├── models/                     # Описание схемы базы данных (SQLAlchemy Declarative)
-│   ├── audit_log.py            # Журнал нарушений и действий модерации
+│   ├── base.py                 # Общие миксины (created_at / updated_at)
+│   ├── log.py                  # Журнал нарушений и действий модерации (audit_logs)
 │   ├── chat.py                 # Группы, политики, ночной режим и фильтрация
 │   ├── user.py                 # Репутация пользователей и счетчики нарушений
 │   └── warn.py                 # Предупреждения со сроком действия
@@ -95,11 +109,16 @@ TelegramWarden/
 │   │   ├── risk_scorer.py      # Эвристический анализатор риска (0 токенов)
 │   │   └── schema.py           # Pydantic модели вердиктов и категорий
 │   ├── cleaner/
-│   │   └── retention.py        # Ротация логов и сгорание старых варнов
+│   │   ├── retention.py        # Ротация логов и сгорание старых варнов
+│   │   └── scheduler.py        # Периодический запуск ретеншна
 │   ├── gatekeeper/
 │   │   ├── anti_raid.py        # Защита от спам-рейдов и наплыва ботов
-│   │   ├── captcha.py          # Менеджер капчи (кнопочная и текстовая)
-│   │   └── cas_client.py       # Клиент проверки Combot Anti-Spam API
+│   │   └── captcha_manager.py  # Менеджер капчи (кнопочная, Redis-состояние)
+│   ├── moderation/
+│   │   ├── night_mode.py       # Расчет окон тишины с учетом часовых поясов
+│   │   └── night_digest.py     # Фоновая сводка ночных событий
+│   ├── reputation/
+│   │   └── cas.py              # Клиент проверки Combot Anti-Spam API
 │   └── media/
 │       ├── nsfw_detector.py    # Локальный классификатор NSFW на ONNX Runtime
 │       ├── ocr_engine.py       # Распознавание текста на картинках (Tesseract)
@@ -195,6 +214,17 @@ TelegramWarden/
 | captcha_enabled (Boolean)   | Включение проверки новых участников             |
 | captcha_type (String)       | button / ai_profiling                           |
 | captcha_timeout_seconds (Int| Таймаут на прохождение капчи                      |
+| cas_check_enabled (Boolean) | Проверка Combot Anti-Spam при входе                |
+| anti_raid_enabled (Boolean) | Защита от рейдов и наплыва ботов                   |
+| clean_service_messages(Bool)| Чистка сервисных сообщений                         |
+| allow_sender_chat (Boolean) | Писать от имени канала                             |
+| allow_via_bot (Boolean)     | Разрешить сообщения через ботов                    |
+| moderation_mode (String)    | ai_judge / standard / review_only / strict_confidence |
+| ai_confidence_threshold(Flt)| Порог автокары (>85% по умолчанию)                |
+| ai_review_threshold (Float) | Порог отправки на ревью (50% по умолчанию)         |
+| ai_sampling_rate (Float)    | Доля случайной выборки на LLM (0.05 по умолчанию)  |
+| full_scan_enabled (Boolean) | Проверять 100% сообщений через LLM                 |
+| media_nsfw/qr/ocr (Boolean) | Локальные фильтры медиа                            |
 | newbie_media_lock_hours(Int)| Блокировка медиа для новичков (в часах)         |
 | night_mode_enabled (Boolean)| Включение ночного режима                        |
 | night_mode_start (String)   | Время начала ночного режима (например, "23:00")|
@@ -218,29 +248,35 @@ TelegramWarden/
 | chat_id (FK, BigInt)        | Привязка к группе                               |
 | telegram_id (BigInt)        | Telegram ID пользователя                        |
 | username (String)           | Юзернейм пользователя                           |
-| reputation_score (Float)    | Динамический коэффициент доверия (0.0 - 1.0)    |
+| first_name (String)         | Имя пользователя                                |
+| reputation_score (Integer)  | Репутация (старт 100, падает при нарушениях)    |
+| message_count (Integer)     | Всего сообщений                                 |
 | total_violations_count (Int)| Количество зафиксированных нарушений            |
 | first_seen_at (DateTime)    | Время первого появления в группе                |
-| is_banned (Boolean)         | Текущий статус блокировки                       |
+| is_banned / is_muted (Bool) | Текущие статусы блокировки                      |
+| is_verified (Boolean)       | Прошел капчу                                    |
 +-------------------------------------------------------------------------------+
-                                      |
-                    +-----------------+-----------------+
-                    | 1 : N                             | 1 : N
-                    v                                   v
+                                       |
+                     +-----------------+-----------------+
+                     | 1 : N                             | 1 : N
+                     v                                   v
 +------------------------------------+ +----------------------------------------+
 |               warns                | |               audit_logs               |
 +------------------------------------+ +----------------------------------------+
 | id (PK, Integer)                   | | id (PK, Integer)                       |
 | user_id (FK, Integer)              | | chat_id (FK, BigInt)                   |
-| chat_id (BigInt)                   | | user_id (FK, Integer)                  |
-| reason (String)                    | | category (String)                      |
-| is_active (Boolean)                | | confidence (Float)                     |
-| created_at (DateTime)              | | action_taken (String)                  |
-| expires_at (DateTime)              | | reason (Text)                          |
-+------------------------------------+ | reviewed_by_admin_id (BigInt)         |
-                                       | is_false_positive (Boolean)            |
-                                       | created_at (DateTime)                  |
-                                       +----------------------------------------+
+| chat_id (BigInt)                   | | user_id (FK, Integer, nullable)        |
+| reason (String)                    | | action_type (String)                   |
+| category (String)                  | | category (String)                      |
+| message_id (BigInt, nullable)      | | confidence (Float, nullable)           |
+| is_active (Boolean)                | | reason (String)                        |
+| created_at (DateTime)              | | raw_message_snippet (Text, nullable)   |
+| expires_at (DateTime)              | | evidence_file_id (String, nullable)    |
+|                                    | | reviewed_by_admin_id (BigInt, nullable)|
+|                                    | | admin_action_taken (String, nullable)  |
+|                                    | | is_false_positive (Boolean)            |
+|                                    | | created_at (DateTime)                  |
++------------------------------------+ +----------------------------------------+
 ```
 
 ---
