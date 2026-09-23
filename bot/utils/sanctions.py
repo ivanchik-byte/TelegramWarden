@@ -130,7 +130,8 @@ class SanctionsExecutor:
         active_warns_count = count_res.scalar_one()
 
         # 3. Check if warn limit is exceeded
-        if active_warns_count >= chat_db.warn_limit:
+        warn_limit = chat_db.warn_limit or 3
+        if active_warns_count >= warn_limit:
             logger.info(f"User {user_db.telegram_id} reached warn limit ({active_warns_count}/{chat_db.warn_limit})")
 
             # Deactivate used warns
@@ -181,6 +182,7 @@ class SanctionsExecutor:
         reason: str,
     ) -> bool:
         """Mute user in Telegram and update database status."""
+        duration_minutes = min(max(duration_minutes, 1), 43200)
         until_date = datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)
         try:
             await bot.restrict_chat_member(

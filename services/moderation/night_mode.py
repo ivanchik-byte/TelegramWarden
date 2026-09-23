@@ -27,6 +27,8 @@ def _parse_hhmm(value: str) -> Optional[tuple[int, int]]:
     """Parse an 'HH:MM' string into (hour, minute), or None when malformed."""
     try:
         parts = value.strip().split(":")
+        if len(parts) != 2:
+            return None
         hour, minute = int(parts[0]), int(parts[1])
         if 0 <= hour <= 23 and 0 <= minute <= 59:
             return hour, minute

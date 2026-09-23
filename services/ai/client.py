@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import math
 import re
 import time
 from typing import Optional
@@ -33,7 +34,11 @@ def normalize_confidence(conf: float) -> float:
     We only scale strictly fractional values in (0.0, 1.0).
     An exact value of 1.0 is treated as 1% threat on the 0-100 scale,
     preventing low-threat 1% violation verdicts from being inflated to 100% (ban-tier).
+    Non-finite input (NaN/inf) raises: it must take the unknown-confidence
+    path in the caller, never flow into threshold comparisons.
     """
+    if not math.isfinite(conf):
+        raise ValueError(f"non-finite confidence: {conf!r}")
     if 0.0 < conf < 1.0:
         return round(conf * 100, 2)
     return conf

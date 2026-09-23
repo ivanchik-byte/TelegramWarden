@@ -24,7 +24,6 @@ BOUNDARY_KEYWORDS = {"цп", "cp", "дп", "csam", "18+", "залив", "лог�
 
 # Deterministic inspection cadence bounds: every Nth message from an
 # established user goes to the LLM no matter how clean it looks.
-DEFAULT_SAMPLING_CADENCE = 10
 MIN_SAMPLING_CADENCE = 2
 MAX_SAMPLING_CADENCE = 100
 
@@ -58,10 +57,14 @@ class RiskScorer:
     """Evaluates message risk and decides whether LLM analysis is required."""
 
     @classmethod
-    def cadence_from_rate(cls, sampling_rate: float) -> int:
-        """Convert a legacy sampling rate (0.0-1.0) into a message cadence."""
+    def cadence_from_rate(cls, sampling_rate: float) -> Optional[int]:
+        """Convert a legacy sampling rate (0.0-1.0) into a message cadence.
+
+        Zero or negative disables sampling entirely (None = never inspect
+        clean traffic), it does not fall back to the default cadence.
+        """
         if not sampling_rate or sampling_rate <= 0:
-            return DEFAULT_SAMPLING_CADENCE
+            return None
         return max(MIN_SAMPLING_CADENCE, min(MAX_SAMPLING_CADENCE, round(1 / sampling_rate)))
 
     @classmethod
@@ -79,7 +82,7 @@ class RiskScorer:
         # Per-user phase derived from the stable Telegram ID: without jitter a
         # spammer could count messages and always strike right after the
         # inspected slot (9 clean, spam on the N-th).
-        phase = telegram_id % cadence
+        phase = telegram_id % cadence if cadence else 0
         risk_score = 0
         trigger_reasons: list[str] = []
 
@@ -137,7 +140,7 @@ class RiskScorer:
         # 7. Zero-risk messages from established users: mostly free pass,
         #    but every cadence-th message (jittered per user) is inspected
         if risk_score == 0 and not is_newcomer:
-            if user_message_count > 0 and user_message_count % cadence == phase:
+            if cadence and user_message_count > 0 and user_message_count % cadence == phase:
                 return RiskScoringResult(
                     should_call_ai=True,
                     risk_score=10,
