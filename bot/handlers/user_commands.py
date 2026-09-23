@@ -4,46 +4,20 @@ from datetime import datetime, timezone
 from typing import Optional
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.admin_logs import get_admin_log_keyboard
+from bot.keyboards.user_home import get_user_home_keyboard
 from bot.utils.admin_checker import is_chat_admin, is_superadmin
+from bot.utils.sanctions import SanctionsExecutor
 from core.config import settings
 from core.logger import logger
 from models import AuditLog, Chat, User, Warn
+from services.ai.client import ai_dispatcher
+from services.ai.normalizer import TextSanitizer
 
 router = Router(name="user_commands")
-
-
-def get_user_home_keyboard(bot_username: str, is_admin: bool = False, webapp_url: str = "") -> InlineKeyboardMarkup:
-    """Generate main interactive home menu keyboard for users."""
-    buttons = [
-        [
-            InlineKeyboardButton(text=" Мой профиль", callback_data="user:profile"),
-            InlineKeyboardButton(text=" Мои предупреждения", callback_data="user:warns"),
-        ],
-        [
-            InlineKeyboardButton(text=" Правила и безопасность", callback_data="user:rules"),
-            InlineKeyboardButton(text=" Команды бота", callback_data="user:help"),
-        ],
-        [
-            InlineKeyboardButton(
-                text=" Добавить бота в группу",
-                url=f"https://t.me/{bot_username}?startgroup=true&admin=change_info+delete_messages+restrict_members+invite_users+pin_messages",
-            ),
-        ],
-    ]
-    if is_admin and webapp_url:
-        from aiogram.types import WebAppInfo
-        buttons.insert(0, [
-            InlineKeyboardButton(
-                text=" Открыть панель управления",
-                web_app=WebAppInfo(url=webapp_url),
-            )
-        ])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @router.callback_query(F.data == "user:home")
@@ -326,7 +300,6 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
         raw_text = target_msg.text or target_msg.caption or ""
         sanitized = TextSanitizer.sanitize(raw_text)
 
-        from services.ai.client import ai_dispatcher
         verdict = await ai_dispatcher.analyze_message(
             message_text=sanitized.clean_text,
             user_info=f"Reported message from {target_user.id} in {chat_id}",

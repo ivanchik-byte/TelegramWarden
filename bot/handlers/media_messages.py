@@ -10,7 +10,7 @@ Enforcement policy:
 
 import io
 from datetime import datetime, timezone
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import Message
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,6 +78,43 @@ async def _count_prior_nsfw_offenses(session: AsyncSession, user_db: User) -> in
     return result.scalar() or 0
 
 
+async def _hold_for_review(
+    bot: Bot,
+    session: AsyncSession,
+    chat_db: Chat,
+    user_db: User,
+    user_name: str,
+    user_id: int,
+    message_id: int,
+    action_type: str,
+    category: str,
+    reason: str,
+    card_reason: str,
+    confidence: float,
+    preview: str,
+    delete_first: bool = True,
+) -> None:
+    if delete_first:
+        await SanctionsExecutor.delete_message(bot, chat_db.chat_id, message_id)
+    audit_entry = AuditLog(
+        chat_id=chat_db.chat_id,
+        user_id=user_db.id,
+        action_type=action_type,
+        category=category,
+        reason=reason,
+        confidence=confidence,
+        raw_message_snippet=preview[:400],
+    )
+    session.add(audit_entry)
+    await session.flush()
+    await send_admin_review_card(
+        bot=bot, chat_db=chat_db, user_name=user_name, user_id=user_id,
+        message_preview=preview, category=category,
+        confidence=confidence, reason=card_reason,
+        audit_entry_id=audit_entry.id,
+    )
+
+
 @router.message(F.photo | F.video | F.video_note | F.animation | F.sticker)
 async def handle_media_message(message: Message, session: AsyncSession) -> None:
     """Download and process incoming media through the local CPU pipeline (0 tokens)."""
@@ -131,23 +168,14 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     # they must not silently pass — delete and hand to admin review.
     if message.sticker and getattr(message.sticker, "is_animated", False):
         logger.info(f"Animated TGS sticker from {user_id} in {chat_id} — unscannable, held for review")
-        await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
-        audit_entry = AuditLog(
-            chat_id=chat_id,
-            user_id=user_db.id,
-            action_type="review_required",
-            category=ViolationCategory.ADULT_NSFW.value,
+        await _hold_for_review(
+            bot=message.bot, session=session, chat_db=chat_db, user_db=user_db,
+            user_name=message.from_user.full_name, user_id=user_id,
+            message_id=message.message_id,
+            action_type="review_required", category=ViolationCategory.ADULT_NSFW.value,
             reason="[TGS] Анимированный стикер не поддается локальному скану — проверьте вручную",
-            confidence=0.0,
-            raw_message_snippet="[TGS STICKER]",
-        )
-        session.add(audit_entry)
-        await session.flush()
-        await send_admin_review_card(
-            bot=message.bot, chat_db=chat_db, user_name=message.from_user.full_name, user_id=user_id,
-            message_preview="[TGS STICKER]", category="adult_nsfw",
-            confidence=0.0, reason="Анимированный стикер удалён: локальный скан недоступен",
-            audit_entry_id=audit_entry.id,
+            card_reason="Анимированный стикер удалён: локальный скан недоступен",
+            confidence=0.0, preview="[TGS STICKER]",
         )
         return
 
@@ -209,23 +237,14 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         )
         if is_newcomer and not low_res_scan and not verdict.nsfw_checked:
             logger.warning(f"NSFW scan unavailable for newcomer media in {chat_id}, user {user_id} — holding for review")
-            await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
-            audit_entry = AuditLog(
-                chat_id=chat_id,
-                user_id=user_db.id,
-                action_type="review_required",
-                category=ViolationCategory.ADULT_NSFW.value,
+            await _hold_for_review(
+                bot=message.bot, session=session, chat_db=chat_db, user_db=user_db,
+                user_name=message.from_user.full_name, user_id=user_id,
+                message_id=message.message_id,
+                action_type="review_required", category=ViolationCategory.ADULT_NSFW.value,
                 reason="[Fail-closed] Медиа новичка не удалось просканировать — проверьте вручную",
-                confidence=0.0,
-                raw_message_snippet=f"[{str(media_type).upper()}] unscanned",
-            )
-            session.add(audit_entry)
-            await session.flush()
-            await send_admin_review_card(
-                bot=message.bot, chat_db=chat_db, user_name=message.from_user.full_name, user_id=user_id,
-                message_preview=f"[{media_type}] NSFW-скан недоступен", category="adult_nsfw",
-                confidence=0.0, reason="Медиа новичка удалено: сканер был недоступен",
-                audit_entry_id=audit_entry.id,
+                card_reason="Медиа новичка удалено: сканер был недоступен",
+                confidence=0.0, preview=f"[{str(media_type).upper()}] NSFW-скан недоступен",
             )
         return
 
@@ -248,22 +267,15 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     # enforced around the clock, matching the policy comment below.
     if is_night_mode_active(chat_db) and verdict.requires_admin_review:
         logger.info(f"Night mode active in chat {chat_id}: media sanction deferred for user {user_id}")
-        audit_entry = AuditLog(
-            chat_id=chat_id,
-            user_id=user_db.id,
-            action_type="night_mode_review",
-            category=cat_key,
+        await _hold_for_review(
+            bot=message.bot, session=session, chat_db=chat_db, user_db=user_db,
+            user_name=user_name, user_id=user_id,
+            message_id=message.message_id,
+            action_type="night_mode_review", category=cat_key,
             reason=f"[Ночной режим] {verdict.reason}",
-            confidence=verdict.confidence,
-            raw_message_snippet=preview[:400],
-        )
-        session.add(audit_entry)
-        await session.flush()
-        await send_admin_review_card(
-            bot=message.bot, chat_db=chat_db, user_name=user_name, user_id=user_id,
-            message_preview=preview, category=cat_key, confidence=verdict.confidence,
-            reason=f"{verdict.reason} (ночной режим — санкция отложена)",
-            audit_entry_id=audit_entry.id,
+            card_reason=f"{verdict.reason} (ночной режим — санкция отложена)",
+            confidence=verdict.confidence, preview=preview,
+            delete_first=False,
         )
         return
 

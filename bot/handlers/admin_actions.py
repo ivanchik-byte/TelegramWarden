@@ -1,21 +1,15 @@
 """Handlers for admin actions on audit log cards (unban, unwarn, false positive feedback)."""
 
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, ChatPermissions
+from aiogram.types import CallbackQuery
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.logger import logger
 from models import AuditLog, User, Warn
 from bot.utils.admin_checker import is_chat_admin
+from bot.utils.sanctions import UNRESTRICTED_PERMISSIONS
 
 router = Router(name="admin_actions")
-
-UNRESTRICTED_PERMISSIONS = ChatPermissions(
-    can_send_messages=True,
-    can_send_media_messages=True,
-    can_send_other_messages=True,
-    can_add_web_page_previews=True,
-)
 
 
 async def ensure_admin(callback: CallbackQuery, session: AsyncSession, chat_id: int) -> bool:

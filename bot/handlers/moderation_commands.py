@@ -4,20 +4,30 @@ import re
 from datetime import datetime, timedelta, timezone
 from html import escape as quote
 from typing import Optional, Tuple
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.admin_logs import get_group_moderation_keyboard
 from bot.utils.admin_checker import is_chat_admin, is_superadmin
-from bot.utils.sanctions import SanctionsExecutor, MUTE_PERMISSIONS
+from bot.utils.sanctions import SanctionsExecutor, UNRESTRICTED_PERMISSIONS
 from core.config import settings
 from core.logger import logger
 from models import AuditLog, Chat, User, Warn
 
 router = Router(name="moderation_commands")
+
+
+async def _load_chat_for_admin(
+    bot: Bot, session: AsyncSession, chat_id: int, admin_id: int
+) -> Optional[Chat]:
+    res = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
+    chat_db = res.scalar_one_or_none()
+    if await is_chat_admin(bot, chat_id, admin_id, chat_db):
+        return chat_db
+    return None
 
 
 def parse_duration_string(duration_str: str) -> Optional[int]:
@@ -134,9 +144,8 @@ async def handle_manual_unwarn_command(message: Message, session: AsyncSession) 
     chat_id = message.chat.id
     admin_id = message.from_user.id if message.from_user else 0
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(message.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(message.bot, session, chat_id, admin_id)
+    if not chat_db:
         return
 
     if not message.reply_to_message or not message.reply_to_message.from_user:
@@ -180,9 +189,8 @@ async def handle_clear_warns_command(message: Message, session: AsyncSession) ->
     chat_id = message.chat.id
     admin_id = message.from_user.id if message.from_user else 0
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(message.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(message.bot, session, chat_id, admin_id)
+    if not chat_db:
         return
 
     if not message.reply_to_message or not message.reply_to_message.from_user:
@@ -219,9 +227,8 @@ async def handle_manual_mute_command(message: Message, session: AsyncSession) ->
     chat_id = message.chat.id
     admin_id = message.from_user.id if message.from_user else 0
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(message.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(message.bot, session, chat_id, admin_id)
+    if not chat_db:
         return
 
     if not message.reply_to_message or not message.reply_to_message.from_user:
@@ -289,9 +296,8 @@ async def handle_manual_unmute_command(message: Message, session: AsyncSession) 
     chat_id = message.chat.id
     admin_id = message.from_user.id if message.from_user else 0
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(message.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(message.bot, session, chat_id, admin_id)
+    if not chat_db:
         return
 
     if not message.reply_to_message or not message.reply_to_message.from_user:
@@ -300,7 +306,6 @@ async def handle_manual_unmute_command(message: Message, session: AsyncSession) 
 
     target_user = message.reply_to_message.from_user
     try:
-        from bot.handlers.admin_actions import UNRESTRICTED_PERMISSIONS
         await message.bot.restrict_chat_member(
             chat_id=chat_id,
             user_id=target_user.id,
@@ -330,9 +335,8 @@ async def handle_manual_ban_command(message: Message, session: AsyncSession) -> 
     chat_id = message.chat.id
     admin_id = message.from_user.id if message.from_user else 0
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(message.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(message.bot, session, chat_id, admin_id)
+    if not chat_db:
         return
 
     if not message.reply_to_message or not message.reply_to_message.from_user:
@@ -388,9 +392,8 @@ async def handle_in_chat_settings_command(message: Message, session: AsyncSessio
     chat_id = message.chat.id
     admin_id = message.from_user.id if message.from_user else 0
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(message.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(message.bot, session, chat_id, admin_id)
+    if not chat_db:
         return
 
     bot_info = await message.bot.get_me()
@@ -399,7 +402,6 @@ async def handle_in_chat_settings_command(message: Message, session: AsyncSessio
 
     kb_buttons = []
     if webapp_url:
-        from aiogram.types import WebAppInfo
         kb_buttons.append([
             InlineKeyboardButton(text=" Открыть панель настроек", web_app=WebAppInfo(url=webapp_url))
         ])
@@ -431,9 +433,8 @@ async def handle_report_delete_callback(callback: CallbackQuery, session: AsyncS
         return
     admin_id = callback.from_user.id
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(callback.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(callback.bot, session, chat_id, admin_id)
+    if not chat_db:
         await callback.answer("Только администраторы могут совершать это действие.", show_alert=True)
         return
 
@@ -456,9 +457,8 @@ async def handle_report_warn_callback(callback: CallbackQuery, session: AsyncSes
         return
     admin_id = callback.from_user.id
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(callback.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(callback.bot, session, chat_id, admin_id)
+    if not chat_db:
         await callback.answer("Только администраторы могут совершать это действие.", show_alert=True)
         return
 
@@ -491,9 +491,8 @@ async def handle_report_ban_callback(callback: CallbackQuery, session: AsyncSess
         return
     admin_id = callback.from_user.id
 
-    res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
-    chat_db = res_c.scalar_one_or_none()
-    if not await is_chat_admin(callback.bot, chat_id, admin_id, chat_db):
+    chat_db = await _load_chat_for_admin(callback.bot, session, chat_id, admin_id)
+    if not chat_db:
         await callback.answer("Только администраторы могут совершать это действие.", show_alert=True)
         return
 

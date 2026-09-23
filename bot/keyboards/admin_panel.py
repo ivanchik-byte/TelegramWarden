@@ -259,12 +259,6 @@ def get_chat_whitelist_keyboard(chat_db: Chat) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                text="Добавить в вайтлист по ID",
-                callback_data=f"adm:wl_add:{chat_id}",
-            )
-        ],
-        [
-            InlineKeyboardButton(
                 text="Очистить вайтлист",
                 callback_data=f"adm:wl_clear:{chat_id}",
             )

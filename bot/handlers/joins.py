@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.captcha import get_captcha_keyboard
+from bot.utils.sanctions import UNRESTRICTED_PERMISSIONS
 from core.logger import logger
 from models import Chat, User
 from services.gatekeeper.anti_raid import AntiRaidDetector
@@ -25,14 +26,6 @@ RESTRICTED_PERMISSIONS = ChatPermissions(
     can_send_media_messages=False,
     can_send_other_messages=False,
     can_add_web_page_previews=False,
-)
-
-# Standard permissions restored after verification
-UNRESTRICTED_PERMISSIONS = ChatPermissions(
-    can_send_messages=True,
-    can_send_media_messages=True,
-    can_send_other_messages=True,
-    can_add_web_page_previews=True,
 )
 
 
