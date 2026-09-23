@@ -158,7 +158,7 @@ class SanctionsExecutor:
                     chat_id=chat_db.chat_id,
                     user_db=user_db,
                     duration_minutes=duration,
-                    reason=f"Превышен лимит предупреждений ({chat_db.warn_limit}/{chat_db.warn_limit})",
+                    reason=f"Превышен лимит предупреждений ({active_warns_count}/{chat_db.warn_limit})",
                 )
         else:
             try:

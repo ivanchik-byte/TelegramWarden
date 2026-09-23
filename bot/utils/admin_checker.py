@@ -17,15 +17,15 @@ ADMIN_CHATS_CACHE_TTL = 300
 
 
 def is_superadmin(user_id: int) -> bool:
-    """Check if user is listed in SUPERADMIN_IDS from environment."""
+    """Global superadmin bypass flag from SUPERADMIN_IDS."""
     return user_id in settings.superadmin_id_list
 
 
 def is_moderation_exempt(user_id: int, chat_db: Optional[Chat]) -> bool:
-    """Check if the user's messages skip moderation entirely.
+    """Whitelist/superadmin immunity: own messages skip moderation, nothing more.
 
-    Being exempt from moderation is NOT a moderation privilege: whitelisted
-    members gain nothing beyond immunity of their own messages.
+    Exemption is NOT a privilege: whitelisted members gain nothing beyond
+    immunity of their own messages.
     """
     if is_superadmin(user_id):
         return True

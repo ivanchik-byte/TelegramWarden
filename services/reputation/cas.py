@@ -22,7 +22,7 @@ class CASClient:
 
     @classmethod
     async def check_user(cls, telegram_id: int) -> CASCheckResult:
-        """Check if user is listed in CAS database with Redis caching."""
+        """CAS lookup with Redis TTL cache (7d banned / 24h clean)."""
         redis_key = f"{REDIS_CAS_PREFIX}{telegram_id}"
 
         try:

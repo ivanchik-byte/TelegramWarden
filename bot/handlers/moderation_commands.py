@@ -116,7 +116,7 @@ async def handle_manual_warn_command(message: Message, session: AsyncSession) ->
     target_name = quote(target_user.first_name) if target_user.first_name else f"ID {target_user.id}"
 
     text = (
-        "️ <b>Выдано предупреждение</b>\n\n"
+        "<b>Выдано предупреждение</b>\n\n"
         f"• <b>Пользователь:</b> {target_name} (ID: <code>{target_user.id}</code>)\n"
         f"• <b>Администратор:</b> {admin_name}\n"
         f"• <b>Причина:</b> {quote(reason)}\n"
@@ -268,7 +268,7 @@ async def handle_manual_mute_command(message: Message, session: AsyncSession) ->
     admin_name = quote(message.from_user.first_name) if message.from_user else "Admin"
     if not mute_applied:
         await message.reply(
-            f"⚠️ <b>Не удалось замутить {quote(target_user.first_name)}</b>: проверьте права бота "
+            f"<b>Не удалось замутить {quote(target_user.first_name)}</b>: проверьте права бота "
             f"(бот должен быть администратором с правом ограничивать участников)."
         )
         return
@@ -365,7 +365,7 @@ async def handle_manual_ban_command(message: Message, session: AsyncSession) -> 
     admin_name = quote(message.from_user.first_name) if message.from_user else "Admin"
     if not ban_applied:
         await message.reply(
-            f"⚠️ <b>Не удалось забанить {quote(target_user.first_name)}</b>: проверьте права бота "
+            f"<b>Не удалось забанить {quote(target_user.first_name)}</b>: проверьте права бота "
             f"(бот должен быть администратором с правом блокировать участников)."
         )
         return
@@ -404,7 +404,7 @@ async def handle_in_chat_settings_command(message: Message, session: AsyncSessio
     ])
 
     await message.reply(
-        "<b>️ Настройки модерации сообщества</b>\n\n"
+        "<b>Настройки модерации сообщества</b>\n\n"
         "Нажмите кнопку ниже, чтобы открыть веб-панель управления фильтрами и правилами:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons),
     )
@@ -434,7 +434,7 @@ async def handle_report_delete_callback(callback: CallbackQuery, session: AsyncS
 
     await SanctionsExecutor.delete_message(callback.bot, chat_id, msg_id)
     admin_name = quote(callback.from_user.first_name) if callback.from_user.first_name else f"Admin {admin_id}"
-    await callback.message.edit_text(f"️ Сообщение удалено администратором {admin_name}.")
+    await callback.message.edit_text(f"Сообщение удалено администратором {admin_name}.")
     await callback.answer("Сообщение удалено!")
 
 
@@ -468,7 +468,7 @@ async def handle_report_warn_callback(callback: CallbackQuery, session: AsyncSes
     await session.commit()
 
     admin_name = quote(callback.from_user.first_name) if callback.from_user.first_name else f"Admin {admin_id}"
-    await callback.message.edit_text(f"️ Пользователю {target_id} выдан варн ({active_count}/{chat_db.warn_limit}) администратором {admin_name}.")
+    await callback.message.edit_text(f"Пользователю {target_id} выдан варн ({active_count}/{chat_db.warn_limit}) администратором {admin_name}.")
     await callback.answer("Варн выдан!")
 
 

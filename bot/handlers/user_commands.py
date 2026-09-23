@@ -88,7 +88,7 @@ async def handle_user_profile_callback(callback: CallbackQuery, session: AsyncSe
     back_kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=" Мои предупреждения", callback_data="user:warns")],
-            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="user:home")],
+            [InlineKeyboardButton(text="Назад в меню", callback_data="user:home")],
         ]
     )
     await callback.message.edit_text(text=profile_text, reply_markup=back_kb)
@@ -134,7 +134,7 @@ async def handle_user_warns_callback(callback: CallbackQuery, session: AsyncSess
     back_kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=" Мой профиль", callback_data="user:profile")],
-            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="user:home")],
+            [InlineKeyboardButton(text="Назад в меню", callback_data="user:home")],
         ]
     )
     await callback.message.edit_text(text=text, reply_markup=back_kb)
@@ -158,7 +158,7 @@ async def handle_user_rules_callback(callback: CallbackQuery) -> None:
     )
     back_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="user:home")],
+            [InlineKeyboardButton(text="Назад в меню", callback_data="user:home")],
         ]
     )
     await callback.message.edit_text(text=text, reply_markup=back_kb)
@@ -189,7 +189,7 @@ async def handle_user_help_callback(callback: CallbackQuery) -> None:
     )
     back_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="user:home")],
+            [InlineKeyboardButton(text="Назад в меню", callback_data="user:home")],
         ]
     )
     await callback.message.edit_text(text=text, reply_markup=back_kb)
@@ -211,7 +211,6 @@ async def handle_in_chat_profile_command(message: Message, session: AsyncSession
     user_name = message.from_user.first_name or "Участник"
     now = datetime.now(timezone.utc)
 
-    # Fetch Chat & User DB
     res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
     chat_db = res_c.scalar_one_or_none()
     warn_limit = chat_db.warn_limit if chat_db else 3
@@ -236,7 +235,7 @@ async def handle_in_chat_profile_command(message: Message, session: AsyncSession
         )
         active_warns = res_w.scalar() or 0
 
-    status = " Нарушений нет" if active_warns == 0 else f"️ Предупреждений: {active_warns}/{warn_limit}"
+    status = "Нарушений нет" if active_warns == 0 else f"Предупреждений: {active_warns}/{warn_limit}"
 
     text = (
         f"<b> Профиль участника: {user_name}</b>\n\n"
@@ -353,11 +352,11 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="️ Удалить",
+                    text="Удалить",
                     callback_data=f"rep:del:{chat_id}:{target_msg.message_id}",
                 ),
                 InlineKeyboardButton(
-                    text="️ Варн",
+                    text="Варн",
                     callback_data=f"rep:warn:{chat_id}:{target_id}",
                 ),
                 InlineKeyboardButton(

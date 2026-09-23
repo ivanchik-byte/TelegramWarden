@@ -47,7 +47,7 @@ class PHashDeduplicator:
 
     @classmethod
     async def is_known_spam(cls, phash_str: str, max_distance: int = 4) -> bool:
-        """Check if image hash matches any known spam hash within Hamming distance."""
+        """Hamming-distance match against the registered spam-hash set."""
         if not phash_str:
             return False
 
