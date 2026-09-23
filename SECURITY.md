@@ -38,7 +38,7 @@ To help us investigate and patch the issue quickly, include:
 
 When optional integrations are enabled, message texts leave the server perimeter:
 
-* **TypeSafe Jev** (`JEV_ENABLED=true`): sanitized message text is sent to `api.typesafe.ai` (USA, SaaS, no on-premise option) for Tier-1 triage. No media bytes are sent — only text. Disable with `JEV_ENABLED=false` to keep all text processing on DeepSeek/Groq only.
+* **TypeSafe Jev** (`JEV_ENABLED=true`): sanitized message text is sent to `api.typesafe.ai` (USA, SaaS, no on-premise option) for Tier-1 triage. No media bytes are sent, only text. Disable with `JEV_ENABLED=false` to keep all text processing on DeepSeek/Groq only.
 * **DeepSeek / Groq**: message texts are sent to the configured LLM providers for verdicts (see `DEEPSEEK_BASE_URL`, `FALLBACK_BASE_URL`).
 
 ## Response timeline and remediation

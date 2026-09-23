@@ -18,7 +18,6 @@ async def handle_settings_command(message: Message, session: AsyncSession) -> No
     username = bot_info.username or "telegrahgwarden_bot"
 
     if message.chat.id < 0:
-        # Group chat: delete command and send self-destructing notice
         try:
             await message.delete()
         except Exception:
@@ -45,13 +44,11 @@ async def handle_settings_command(message: Message, session: AsyncSession) -> No
             reply_markup=kb,
         )
 
-        # Auto-delete notice after 20 seconds
         await asyncio.sleep(20)
         try:
             await temp_msg.delete()
         except Exception:
             pass
     else:
-        # In DM: redirect to /start command
         from bot.handlers.start import handle_start_command
         await handle_start_command(message, session)

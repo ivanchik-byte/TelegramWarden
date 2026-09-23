@@ -19,7 +19,7 @@ def test_clean_message_from_established_user_passes_zero_tokens():
 
 
 def test_scheduled_sampling_fires_on_cadence_for_any_length():
-    """Every N-th message is inspected deterministically — long messages included."""
+    """Every N-th message is inspected deterministically, including long messages."""
     sanitized_long = TextSanitizer.sanitize("Обычный длинный текст без единого триггера. " * 8)
     result_long = RiskScorer.evaluate(
         sanitized=sanitized_long,

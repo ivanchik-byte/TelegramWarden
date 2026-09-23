@@ -87,7 +87,7 @@ class MediaModerationPipeline:
                 evidence_frame_bytes=None,
             )
 
-        # 1. pHash Spam Check (~1 ms, CPU-bound -> thread pool)
+        # Fast pHash check against known spam hashes; offloaded to a thread to avoid blocking the event loop
         phash_str = await asyncio.to_thread(PHashDeduplicator.compute_hash, media_bytes)
         if phash_str and await PHashDeduplicator.is_known_spam(phash_str):
             logger.info("Known spam pHash detected in media pipeline")
@@ -100,11 +100,10 @@ class MediaModerationPipeline:
                 evidence_frame_bytes=media_bytes,
             )
 
-        # 2. Frame Extraction (CPU-bound decode -> thread pool; PyAV can take
-        # seconds and must never freeze the event loop)
+        # PyAV video container decoding is CPU-bound and must not freeze the event loop
         frames: list[Image.Image] = []
         if media_type in ("video", "video_note", "animation"):
-            # Telegram .animation is an MP4/GIF hybrid: PyAV decodes both
+            # Telegram animations (.animation) can be MP4 or GIF; PyAV handles both
             frames = await asyncio.to_thread(
                 VideoKeyframeSampler.sample_keyframes, media_bytes, 5
             )
@@ -131,8 +130,8 @@ class MediaModerationPipeline:
                 evidence_frame_bytes=None,
             )
 
-        # 3. Inspect Frames — NSFW first across ALL frames, then soft signals,
-        # so a QR code on an early frame cannot short-circuit a porn verdict.
+        # Evaluate NSFW first across all frames before checking soft signals like QR/OCR.
+        # This prevents an incidental QR code on an early frame from short-circuiting a ban verdict.
         def _encode_frames() -> list[tuple[Image.Image, bytes]]:
             encoded = []
             for frame in frames:
@@ -143,8 +142,8 @@ class MediaModerationPipeline:
 
         encoded_frames = await asyncio.to_thread(_encode_frames)
 
-        # Videos cannot be hashed from raw container bytes: derive the spam
-        # fingerprint from the first decoded frame instead.
+        # Video container bytes cannot be compared directly against image hashes:
+        # derive the spam fingerprint from the first decoded keyframe instead.
         if not phash_str and encoded_frames and media_type in ("video", "video_note", "animation"):
             phash_str = await asyncio.to_thread(
                 PHashDeduplicator.compute_hash, encoded_frames[0][1]
@@ -160,7 +159,7 @@ class MediaModerationPipeline:
                     evidence_frame_bytes=encoded_frames[0][1],
                 )
 
-        # A. NSFW Local Detector (hard signal, highest priority)
+        # Local OpenNSFW classifier is a hard signal with the highest priority
         nsfw_checked = False
         if scan_nsfw:
             for frame, frame_bytes in encoded_frames:
@@ -182,11 +181,11 @@ class MediaModerationPipeline:
                         nsfw_checked=True,
                     )
 
-        # B/C. QR and OCR — soft signals flagged for admin review only
+        # QR and OCR detections are soft signals flagged for human review
         if scan_qr or scan_ocr:
             for idx, (frame, frame_bytes) in enumerate(encoded_frames):
-                # B. QR Code Scanner: any URL-bearing QR goes to admin review,
-                # never auto-sanctioned (legitimate menus/Wi-Fi/websites exist).
+                # Any URL-bearing QR code goes to review rather than auto-sanction,
+                # since legitimate menus, Wi-Fi configs, and payment receipts use QR codes.
                 if scan_qr:
                     qr_result = await asyncio.to_thread(QRDetector.scan_image, frame_bytes)
                     if qr_result.has_qr and qr_result.payloads:
@@ -202,7 +201,7 @@ class MediaModerationPipeline:
                             requires_admin_review=True,
                         )
 
-                # C. OCR Text Scanner (CPU-bound pytesseract -> thread pool)
+                # CPU-bound OCR is throttled to MAX_OCR_FRAMES to keep inspection latency bounded
                 if scan_ocr and idx < MediaModerationPipeline.MAX_OCR_FRAMES:
                     ocr_result = await asyncio.to_thread(OCREngine.scan_image, frame)
                     if ocr_result.has_text and ocr_result.sanitized.extracted_urls:
@@ -217,8 +216,7 @@ class MediaModerationPipeline:
                             requires_admin_review=True,
                         )
 
-        # 4. Clean Frames Cleanup
-        # All frames discarded from memory automatically
+        # All frames passed checks without violations
         return MediaModerationVerdict(
             is_violation=False,
             category=ViolationCategory.CLEAN,

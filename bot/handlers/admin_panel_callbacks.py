@@ -44,12 +44,12 @@ async def handle_admin_menu_callback(callback: CallbackQuery, session: AsyncSess
         return
 
     webapp_url = settings.WEBAPP_URL or ""
-    active_model = settings.DEEPSEEK_MODEL or "meta/llama-3.1-8b-instruct"
+    active_model = settings.DEEPSEEK_MODEL or "deepseek-chat"
     text = (
         "<b>Панель управления TelegramWarden</b>\n\n"
         "Вы авторизованы как <b>Администратор</b>.\n"
         f"• Доступных групп: <b>{len(accessible_chats)}</b>\n"
-        f"• ИИ-Движок: <b>Онлайн (NVIDIA NIM • <code>{active_model}</code>)</b>\n\n"
+        f"• Модель текста: <code>{active_model}</code>\n\n"
         "Выберите группу для настройки:"
     )
     keyboard = get_admin_main_menu_keyboard(accessible_chats, username, webapp_url)
@@ -74,7 +74,6 @@ async def handle_admin_chat_details(callback: CallbackQuery, session: AsyncSessi
         await callback.answer("У вас нет прав для управления этой группой.", show_alert=True)
         return
 
-    # Fetch 24h stats
     v_res = await session.execute(select(func.count(AuditLog.id)).where(AuditLog.chat_id == chat_id))
     total_violations = v_res.scalar() or 0
 
@@ -82,11 +81,11 @@ async def handle_admin_chat_details(callback: CallbackQuery, session: AsyncSessi
         f"<b>Панель сообщества: {chat_db.title}</b>\n\n"
         f"• <b>ID чата:</b> <code>{chat_db.chat_id}</code>\n"
         f"• <b>Статус защиты:</b> <b>{'ВКЛЮЧЕНА' if chat_db.is_active else 'ВЫКЛЮЧЕНА'}</b>\n"
-        f"• <b>Порог уверенности ИИ:</b> <b>{int(chat_db.ai_confidence_threshold)}%</b>\n"
-        f"• <b>Ночной режим:</b> <b>{'ВКЛ' if chat_db.night_mode_enabled else 'ВЫКЛ'}</b> ({chat_db.night_mode_start} — {chat_db.night_mode_end} UTC)\n"
-        f"• <b>Нейтрализовано угроз:</b> <b>{total_violations}</b>\n"
+        f"• <b>Порог уверенности:</b> <b>{int(chat_db.ai_confidence_threshold)}%</b>\n"
+        f"• <b>Ночной режим:</b> <b>{'ВКЛ' if chat_db.night_mode_enabled else 'ВЫКЛ'}</b> ({chat_db.night_mode_start}-{chat_db.night_mode_end} UTC)\n"
+        f"• <b>Удалено нарушений:</b> <b>{total_violations}</b>\n"
         f"• <b>Режим наказания:</b> <b>{chat_db.warn_punishment.upper()}</b>\n\n"
-        " <i>Для просмотра интерактивных графиков, живой карты угроз и детальных логов откройте Mini App по кнопке ниже:</i>"
+        "<i>Журнал действий и статистика доступны в веб-панели:</i>"
     )
     keyboard = get_chat_details_keyboard(chat_db, settings.WEBAPP_URL)
     await callback.message.edit_text(text=text, reply_markup=keyboard)
@@ -241,7 +240,7 @@ async def handle_admin_night_hour_adjust(callback: CallbackQuery, session: Async
     await session.commit()
     keyboard = get_night_mode_config_keyboard(chat_db)
     await callback.message.edit_reply_markup(reply_markup=keyboard)
-    await callback.answer(f"Расписание: {chat_db.night_mode_start} — {chat_db.night_mode_end}")
+    await callback.answer(f"Расписание: {chat_db.night_mode_start}-{chat_db.night_mode_end}")
 
 
 @router.callback_query(F.data.startswith("adm:sens:"))
@@ -350,17 +349,15 @@ async def handle_admin_stats_view(callback: CallbackQuery, session: AsyncSession
         await callback.answer("Нет прав.", show_alert=True)
         return
 
-    # Counts
     total_viol = (await session.execute(select(func.count(AuditLog.id)).where(AuditLog.chat_id == chat_id))).scalar() or 0
     total_warns = (await session.execute(select(func.count(Warn.id)).where(Warn.chat_id == chat_id))).scalar() or 0
     total_bans = (await session.execute(select(func.count(AuditLog.id)).where(AuditLog.chat_id == chat_id, AuditLog.action_type == "ban_user"))).scalar() or 0
 
     text = (
         f"<b>Аналитика безопасности: {chat_db.title}</b>\n\n"
-        f"• Всего нейтрализовано спама: <b>{total_viol}</b>\n"
+        f"• Удалено спам-сообщений: <b>{total_viol}</b>\n"
         f"• Выдано предупреждений: <b>{total_warns}</b>\n"
         f"• Заблокировано нарушителей: <b>{total_bans}</b>\n"
-        f"• Точность ИИ-модели: <b>98.8%</b>\n"
     )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Назад к группе", callback_data=f"adm:chat:{chat_id}")]])
     await callback.message.edit_text(text=text, reply_markup=keyboard)
@@ -388,7 +385,7 @@ async def handle_admin_logs_view(callback: CallbackQuery, session: AsyncSession)
     logs = (await session.execute(stmt)).scalars().all()
 
     if not logs:
-        text = f"<b>Журнал инцидентов: {chat_db.title}</b>\n\nНарушений пока не зафиксировано — чат чист!"
+        text = f"<b>Журнал инцидентов: {chat_db.title}</b>\n\nНарушений пока не зафиксировано, чат чист."
     else:
         text = f"<b>Последние инциденты: {chat_db.title}</b>\n\n"
         for log in logs:
@@ -404,12 +401,12 @@ async def handle_admin_logs_view(callback: CallbackQuery, session: AsyncSession)
 async def handle_admin_scanner_info(callback: CallbackQuery) -> None:
     """Explain how to use DM AI scanner."""
     text = (
-        "<b>Персональный ИИ-Сканер в ЛС</b>\n\n"
+        "<b>Проверка сообщений в ЛС</b>\n\n"
         "Отправьте или перешлите боту прямо в этот чат любое сообщение:\n"
         "• Текст или подозрительную ссылку\n"
         "• Фотографию или скриншот\n"
-        "• Видеоролик или видеокружочек\n\n"
-        "Нейросеть мгновенно разберет скрытые смыслы и выдаст подробный отчет!"
+        "• Видеоролик или видеосообщение\n\n"
+        "Бот проверит пересланный текст или медиафайл на спам и нарушения."
     )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="В главное меню", callback_data="adm:menu")]])
     await callback.message.edit_text(text=text, reply_markup=keyboard)
@@ -420,9 +417,9 @@ async def handle_admin_scanner_info(callback: CallbackQuery) -> None:
 async def handle_admin_help_view(callback: CallbackQuery) -> None:
     """Show help documentation."""
     text = (
-        "<b>Справка по системе TelegramWarden</b>\n\n"
+        "<b>Справка TelegramWarden</b>\n\n"
         "• <b>Все настройки чатов производятся в ЛС</b>, чтобы не засорять рабочую группу.\n"
-        "• В группе бот работает бесшумно (удаляет спам и капчует новичков).\n"
+        "• В группе бот удаляет спам и проверяет новых участников капчей.\n"
         "• Для добавления нового чата нажмите «Добавить бота в новую группу» и выдайте права администратора."
     )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="В главное меню", callback_data="adm:menu")]])

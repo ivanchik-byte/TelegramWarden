@@ -35,13 +35,11 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
     user = event.new_chat_member.user
     chat = event.chat
 
-    # Ignore bots
     if user.is_bot:
         return
 
     logger.info(f"New user joined chat {chat.id}: {user.id} (@{user.username})")
 
-    # 1. Fetch chat settings from database or create default
     result = await session.execute(select(Chat).where(Chat.chat_id == chat.id))
     chat_db = result.scalar_one_or_none()
     if not chat_db:
@@ -49,7 +47,6 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
         session.add(chat_db)
         await session.flush()
 
-    # 2. Check CAS Database if enabled
     if chat_db.cas_check_enabled:
         cas_result = await CASClient.check_user(user.id)
         if cas_result.is_banned:
@@ -60,7 +57,6 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
             except Exception as err:
                 logger.error(f"Failed to ban CAS spammer {user.id}: {err}")
 
-    # 3. Check Anti-Raid Threshold
     raid_lockdown = False
     if chat_db.anti_raid_enabled:
         raid_status = await AntiRaidDetector.record_join_and_check(chat_id=chat.id)
@@ -76,10 +72,7 @@ async def handle_new_chat_member(event: ChatMemberUpdated, session: AsyncSession
             except Exception as err:
                 logger.error(f"Failed to restrict user during raid: {err}")
 
-    # 4. Issue Captcha Challenge if enabled.
-    # Issued even during raid lockdown: the restriction is lifted only by a
-    # successful verification, otherwise lockdown-muted newcomers stay muted
-    # forever with no path to verify.
+    # issue captcha even during raid lockdown: successful verification lifts the restriction
     if chat_db.captcha_enabled:
         try:
             await event.bot.restrict_chat_member(
@@ -174,10 +167,8 @@ async def handle_captcha_callback(callback: CallbackQuery, session: AsyncSession
         await callback.answer(text="Время на подтверждение истекло. Попросите администратора добавить вас заново.", show_alert=True)
         return
 
-    # Complete challenge session in Redis
     await CaptchaManager.complete_challenge(chat_id=chat_id, user_id=clicker_user_id)
 
-    # Restore chat permissions in Telegram
     try:
         await callback.bot.restrict_chat_member(
             chat_id=chat_id,
@@ -187,7 +178,6 @@ async def handle_captcha_callback(callback: CallbackQuery, session: AsyncSession
     except Exception as err:
         logger.error(f"Failed to restore permissions for user {clicker_user_id}: {err}")
 
-    # Delete the captcha challenge message
     try:
         await callback.message.delete()
     except Exception as err:

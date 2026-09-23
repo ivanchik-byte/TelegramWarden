@@ -40,7 +40,6 @@ async def get_chat_statistics(
     )
     total_warns = total_warns_res.scalar() or 0
 
-    # 6. Violations by category
     cat_res = await session.execute(
         select(AuditLog.category, func.count(AuditLog.id))
         .where(AuditLog.chat_id == chat_id)

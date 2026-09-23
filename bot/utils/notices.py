@@ -26,7 +26,7 @@ async def send_group_moderation_notice(
         f"• <b>Действие:</b> <code>{quote(action_title)}</code>\n"
         f"• <b>Причина:</b> {quote(category)} ({round(confidence)}%)\n"
         f"• <b>Пояснение:</b> {quote(reason)}\n\n"
-        "<i>Если вы не согласны с решением — нажмите кнопку ниже для подачи апелляции:</i>"
+        "<i>Если вы не согласны с решением, нажмите кнопку ниже для подачи апелляции:</i>"
     )
     try:
         await bot.send_message(
@@ -76,5 +76,5 @@ async def send_admin_review_card(
         )
     except Exception as err:
         # Broad catch: a card failure must never bubble up and roll back the
-        # transaction — sanctions are already applied in Telegram by now
+        # transaction: sanctions are already applied in Telegram by now
         logger.warning(f"Failed to send admin review card to {target}: {err}")

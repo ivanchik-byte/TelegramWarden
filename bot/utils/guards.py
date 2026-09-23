@@ -13,9 +13,10 @@ async def enforce_source_guards(message: Message, chat_db: Chat) -> bool:
     """
     chat_id = message.chat.id
 
-    # Anti-Channel protection (sent as channel / anonymously)
     if message.sender_chat:
         sender_channel_id = message.sender_chat.id
+        # telegram flags messages from anonymous group admins with sender_chat equal to the group itself;
+        # only enforce against foreign channels to avoid banning group admins
         if sender_channel_id != chat_id and not chat_db.allow_sender_chat:
             if sender_channel_id not in (chat_db.whitelisted_channels or []):
                 logger.info(f"Unauthorized sender_chat {sender_channel_id} in group {chat_id}. Deleting.")

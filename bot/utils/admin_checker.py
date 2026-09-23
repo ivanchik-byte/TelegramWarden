@@ -43,11 +43,9 @@ async def is_chat_admin(
     Only global superadmins and Telegram-native chat administrators may
     moderate. Chat whitelist membership deliberately grants no privileges.
     """
-    # 1. Superadmin global bypass from .env
     if is_superadmin(user_id):
         return True
 
-    # 2. Direct Telegram chat member status check
     if chat_id < 0:
         try:
             member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)

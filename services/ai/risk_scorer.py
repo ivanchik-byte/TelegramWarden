@@ -86,35 +86,34 @@ class RiskScorer:
         risk_score = 0
         trigger_reasons: list[str] = []
 
-        # 1. Newcomer penalty (< 3 days or < 5 messages)
+        # Accounts under 3 days or with fewer than 5 messages are weighted heavily
         is_newcomer = (user_days_in_chat < 3) or (user_message_count < 5)
         if is_newcomer:
             risk_score += 30
             trigger_reasons.append("newcomer_activity")
 
-        # 2. Forwarded message from another channel/chat
+        # Forwarded content is frequently used in spam syndicates to bypass sender attribution
         if is_forward:
             risk_score += 35
             trigger_reasons.append("forwarded_message")
 
-        # 3. External URLs detected
+        # External URLs are primary scam vectors
         if sanitized.extracted_urls:
             risk_score += 45
             trigger_reasons.append(f"contains_urls:{len(sanitized.extracted_urls)}")
 
-        # 4. @usernames or bot links detected
+        # Mentions and bot handles often funnel victims into private chats
         if sanitized.extracted_usernames:
             risk_score += 25
             trigger_reasons.append(f"contains_mentions:{len(sanitized.extracted_usernames)}")
 
-        # 5. Invisible Zero-Width / RTL bypass characters
+        # Invisible Zero-Width and RTL marks strongly indicate deliberate evasion
         if sanitized.had_invisible_characters:
             risk_score += 50
             trigger_reasons.append("invisible_characters_detected")
 
-        # 6. High-risk keywords checked against four views of the text:
-        #    original, Latin-canonical, and both de-obfuscated variants
-        #    (leet digits and dotted/separated spelling).
+        # Match keywords against four text variants: original, Latin-canonical,
+        # and both de-obfuscated forms (leet digits and dotted spelling).
         variants = [
             sanitized.clean_text.lower(),
             sanitized.canonical_text.lower(),
@@ -137,8 +136,8 @@ class RiskScorer:
             unique_matched = sorted(set(matched_keywords))
             trigger_reasons.append(f"keywords_matched:{','.join(unique_matched[:3])}")
 
-        # 7. Zero-risk messages from established users: mostly free pass,
-        #    but every cadence-th message (jittered per user) is inspected
+        # Established users with zero accumulated risk bypass LLM calls, except for
+        # deterministic cadence checks with per-user jitter to catch sleeper bots.
         if risk_score == 0 and not is_newcomer:
             if cadence and user_message_count > 0 and user_message_count % cadence == phase:
                 return RiskScoringResult(

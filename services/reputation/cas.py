@@ -25,7 +25,6 @@ class CASClient:
         """Check if user is listed in CAS database with Redis caching."""
         redis_key = f"{REDIS_CAS_PREFIX}{telegram_id}"
 
-        # 1. Check Redis Cache
         try:
             redis = await redis_manager.get_client()
             cached_val = await redis.get(redis_key)
@@ -35,7 +34,6 @@ class CASClient:
         except Exception as err:
             logger.warning(f"Redis CAS cache read error: {err}")
 
-        # 2. Query CAS REST API
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
                 resp = await client.get(f"{CAS_API_URL}?user_id={telegram_id}")
@@ -45,10 +43,9 @@ class CASClient:
                     offenses = int(data.get("result", {}).get("offenses", 0)) if is_banned else 0
                     time_added = data.get("result", {}).get("time_added")
 
-                    # 3. Cache result in Redis
                     try:
                         redis = await redis_manager.get_client()
-                        # Cache banned users for 7 days (604800s), clean users for 24h (86400s)
+                        # Cache confirmed spammers for 7 days; clean profiles expire in 24h
                         ttl = 604800 if is_banned else 86400
                         await redis.set(redis_key, "1" if is_banned else "0", ex=ttl)
                     except Exception as cache_err:

@@ -12,16 +12,14 @@ def get_admin_main_menu_keyboard(
     """Generate main admin dashboard with managed groups list."""
     buttons = []
 
-    # 1. Mini App WebApp Button (if URL configured)
     if webapp_url and webapp_url.startswith("https://") and "localhost" not in webapp_url:
         buttons.append([
             InlineKeyboardButton(
-                text="Открыть Mini App Дашборд",
+                text="Открыть веб-панель",
                 web_app=WebAppInfo(url=webapp_url),
             )
         ])
 
-    # 2. List of managed groups
     if chats:
         for chat in chats[:8]:
             title = chat.title or f"Chat {chat.chat_id}"
@@ -32,7 +30,6 @@ def get_admin_main_menu_keyboard(
                 )
             ])
 
-    # 3. Add to new group button
     buttons.append([
         InlineKeyboardButton(
             text="Добавить бота в новую группу",
@@ -40,10 +37,9 @@ def get_admin_main_menu_keyboard(
         )
     ])
 
-    # 4. Scanner & Help
     buttons.append([
         InlineKeyboardButton(
-            text="ИИ-Сканер в ЛС",
+            text="Сканер в ЛС",
             callback_data="adm:scanner_info",
         ),
         InlineKeyboardButton(
@@ -136,7 +132,7 @@ def get_chat_filters_keyboard(chat_db: Chat) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text=f"Анти-Рейд Паник-Мод: [{raid_st}]",
+                text=f"Защита от рейдов: [{raid_st}]",
                 callback_data=f"adm:tgl:raid:{chat_id}",
             )
         ],
@@ -148,13 +144,13 @@ def get_chat_filters_keyboard(chat_db: Chat) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text=f"Очистка системных смс: [{serv_st}]",
+                text=f"Очистка сервисных сообщений: [{serv_st}]",
                 callback_data=f"adm:tgl:service:{chat_id}",
             )
         ],
         [
             InlineKeyboardButton(
-                text=f"ИИ-анализ спама: [{ai_st}]",
+                text=f"Анализ спама: [{ai_st}]",
                 callback_data=f"adm:tgl:ai:{chat_id}",
             )
         ],

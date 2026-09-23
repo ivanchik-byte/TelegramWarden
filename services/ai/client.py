@@ -95,7 +95,7 @@ def _coerce_bool(value, default: bool = False) -> bool:
 # categories stay below the default ban threshold (85%) so that raw LLM
 # overconfidence alone can never trigger a confidence-based ban. Floors sit
 # BELOW the default review threshold (50%): a genuinely unsure model must
-# not be clamped up into automatic sanctions — unsure means pass to review
+# not be clamped up into automatic sanctions; unsure means pass to review
 # only if the model itself crossed 50.
 #
 # DESIGN DECISION (do not "fix"): in strict_confidence mode toxic_insult and
@@ -163,7 +163,7 @@ class AIClientDispatcher:
         """Extract JSON block and parse into strict Pydantic model with calibrated threat risk."""
         clean_json_str = raw_content.strip()
 
-        # Check for markdown code fence
+        # Strip markdown code fences (e.g. ```json ... ```) frequently emitted by LLMs
         match = JSON_BLOCK_PATTERN.search(clean_json_str)
         if match:
             clean_json_str = match.group(1).strip()
@@ -204,7 +204,7 @@ class AIClientDispatcher:
             parsed_dict["suggested_action"] = "pass_message"
         elif confidence_unknown:
             # Unknown certainty on a claimed violation: keep the flag but do
-            # NOT manufacture a number — every threshold gate sees it as unsure
+            # NOT manufacture a number, so every threshold gate sees it as unsure
             parsed_dict["confidence"] = 1.0
         else:
             # Clamp violation confidence into its category band: preserves the
@@ -302,7 +302,7 @@ class AIClientDispatcher:
             self._cache[cache_key] = (time.monotonic(), verdict)
         else:
             self.fail_open_count += 1
-            logger.warning(f"AI moderation fail-open (total: {self.fail_open_count}) — verdict NOT cached")
+            logger.warning(f"AI moderation fail-open (total: {self.fail_open_count}): verdict NOT cached")
         return verdict
 
     def _cache_verdict(self, cache_key: str, verdict: AIModerationVerdict) -> AIModerationVerdict:
@@ -330,8 +330,6 @@ class AIClientDispatcher:
         )
 
     async def _dispatch_provider(self, messages: list[dict]) -> AIModerationVerdict:
-        """Try the primary provider, then the fallback, then fail open."""
-        # 1. Try Primary LLM Provider (DeepSeek)
         try:
             response = await self.primary_client.chat.completions.create(
                 model=settings.DEEPSEEK_MODEL,
@@ -346,7 +344,6 @@ class AIClientDispatcher:
         except Exception as primary_err:
             logger.warning(f"Primary AI Provider failed: {primary_err}")
 
-            # 2. Try Fallback Provider if available
             if self.fallback_client:
                 try:
                     logger.info("Switching to Fallback AI Provider...")
@@ -362,7 +359,7 @@ class AIClientDispatcher:
                 except Exception as fallback_err:
                     logger.error(f"Fallback AI Provider also failed: {fallback_err}")
 
-        # 3. Safe Default Verdict in case of total provider failure
+        # Total provider outage: fail open to avoid blackholing community chat traffic
         logger.warning("AI moderation unavailable: failing open (CLEAN) for this message")
         return AIModerationVerdict(
             is_violation=False,

@@ -10,7 +10,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-warden_db}
     ports:
       # Bound to loopback only: the database must never face the internet.
-      # Remove this mapping entirely in production — containers reach it via
+      # Remove this mapping entirely in production, as containers reach it via
       # warden_network.
       - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
     volumes:

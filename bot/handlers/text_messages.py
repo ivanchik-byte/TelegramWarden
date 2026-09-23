@@ -18,10 +18,10 @@ router = Router(name="text_moderation")
 async def handle_text_message(message: Message, session: AsyncSession) -> None:
     """Analyze incoming text message against security policies and AI intent engine."""
     chat_id = message.chat.id
-    if chat_id > 0:  # Skip private bot chats
+    if chat_id > 0:
+        # groups only; private bot chats route to start/settings dashboard
         return
 
-    # 1. Load or initialize chat configuration
     result = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
     chat_db = result.scalar_one_or_none()
     if not chat_db:
@@ -32,7 +32,6 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
     if not chat_db.is_active:
         return
 
-    # 2. Anti-Channel / Anti-Inline bot source protection (shared guard)
     if not await enforce_source_guards(message, chat_db):
         return
 
@@ -41,9 +40,9 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
 
     user_id = message.from_user.id
     if user_id in (chat_db.whitelisted_users or []):
-        return  # Whitelisted user bypass (moderation exemption only)
+        # whitelist grants moderation exemption only, source guards above still apply
+        return
 
-    # 3. Get or create permanent user profile
     user_db = await SanctionsExecutor.get_or_create_user(
         session=session,
         chat_id=chat_id,
@@ -51,10 +50,10 @@ async def handle_text_message(message: Message, session: AsyncSession) -> None:
         username=message.from_user.username,
         first_name=message.from_user.first_name,
     )
+    # lock row before incrementing message_count to prevent lost updates under concurrent messages
     await SanctionsExecutor.lock_user(session, user_db)
     user_db.message_count += 1
 
-    # 4. Shared moderation core: sanitize -> risk score -> LLM -> enforce
     await moderate_text_content(
         bot=message.bot,
         session=session,

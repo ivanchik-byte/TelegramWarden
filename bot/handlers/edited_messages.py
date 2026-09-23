@@ -2,7 +2,7 @@
 
 Reuses the shared moderation core so edits follow the exact same policy
 as fresh messages: review thresholds, moderation modes, category actions,
-night mode and tiered sanctions — with an "edited" marker on every reason.
+night mode and tiered sanctions, with an "edited" marker on every reason.
 """
 
 from datetime import datetime, timezone

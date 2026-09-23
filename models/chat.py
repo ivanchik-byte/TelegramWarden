@@ -20,7 +20,7 @@ class Chat(Base, TimestampMixin):
     # Admin Audit Log Channel/Topic
     log_channel_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
-    # 1. Join & Gatekeeper Settings
+    # Gatekeeper and join verification
     captcha_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     captcha_type: Mapped[str] = mapped_column(String(32), default="button")  # 'button', 'ai_profiling'
     captcha_timeout_seconds: Mapped[int] = mapped_column(Integer, default=120)
@@ -28,12 +28,12 @@ class Chat(Base, TimestampMixin):
     anti_raid_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     clean_service_messages: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # 2. Protection & Restrictions
+    # Restrictions
     allow_sender_chat: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # write as channel
     allow_via_bot: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)        # inline bots
     newbie_media_lock_hours: Mapped[int] = mapped_column(Integer, default=0)                # 0 = disabled
 
-    # 3. AI & Moderation Engine
+    # Moderation engine
     ai_moderation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     moderation_mode: Mapped[str] = mapped_column(String(32), default="ai_judge")          # 'ai_judge', 'standard', 'review_only', 'strict_confidence'
     report_mode: Mapped[str] = mapped_column(String(32), default="admin_only")              # 'admin_only' (to admin review) vs 'ai_instant' (instant AI verdict)
@@ -53,24 +53,24 @@ class Chat(Base, TimestampMixin):
         "illegal_contraband": "ban",
     })
 
-    # 4. Media & Vision Protection (0 tokens on CPU)
+    # Media inspection toggles
     media_nsfw_filter_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     media_qr_filter_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     media_ocr_filter_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # 5. Sanctions & Warnings
+    # Sanctions and warnings
     warn_limit: Mapped[int] = mapped_column(Integer, default=3)
     warn_expiration_days: Mapped[int] = mapped_column(Integer, default=7)  # Warns expire after N days
     warn_punishment: Mapped[str] = mapped_column(String(32), default="mute")  # 'mute', 'ban', 'kick'
     warn_mute_duration_minutes: Mapped[int] = mapped_column(Integer, default=1440)  # 24 hours
 
-    # 6. Night Mode / Quiet Hours
+    # Night mode
     night_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     night_mode_start: Mapped[str] = mapped_column(String(8), default="23:00")
     night_mode_end: Mapped[str] = mapped_column(String(8), default="08:00")
     night_mode_timezone: Mapped[str] = mapped_column(String(64), default="UTC")
 
-    # 7. Advanced JSON Configurations (Whitelists, Topic Overrides)
+    # Whitelists and topic overrides
     whitelisted_users: Mapped[list[int]] = mapped_column(JSON, default=list)
     whitelisted_channels: Mapped[list[int]] = mapped_column(JSON, default=list)
     whitelisted_bots: Mapped[list[str]] = mapped_column(JSON, default=list)

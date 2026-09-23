@@ -37,7 +37,7 @@ def validate_telegram_init_data(init_data_str: str, bot_token: str) -> Optional[
         if not received_hash:
             return None
 
-        # Build data check string sorted alphabetically by keys
+        # Telegram WebApp authentication specification: sort parameters lexicographically as key=value joined by newlines
         data_check_string = "\n".join(
             f"{key}={value}" for key, value in sorted(parsed_params.items())
         )

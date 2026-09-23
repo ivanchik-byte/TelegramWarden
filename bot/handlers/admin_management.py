@@ -19,14 +19,12 @@ async def handle_admin_command(message: Message, session: AsyncSession) -> None:
     chat_id = message.chat.id
     user_id = message.from_user.id if message.from_user else 0
 
-    # 1. If in group chat, delete user command to keep group clean
     if chat_id < 0:
         try:
             await message.delete()
         except Exception:
             pass
 
-    # 2. Fetch chat settings
     result = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
     chat_db = result.scalar_one_or_none()
 
@@ -35,14 +33,12 @@ async def handle_admin_command(message: Message, session: AsyncSession) -> None:
         session.add(chat_db)
         await session.flush()
 
-    # 3. Check caller permissions
     has_rights = await is_chat_admin(message.bot, chat_id, user_id, chat_db)
     if not has_rights:
         if chat_id > 0:
             await message.reply("У вас нет прав для управления администраторами.")
         return
 
-    # 3. Parse command arguments: /admin add <id>, /admin remove <id>, /admin list
     args = (message.text or "").split()
     if len(args) < 2 or args[1] == "list":
         whitelist = chat_db.whitelisted_users or []
@@ -52,9 +48,9 @@ async def handle_admin_command(message: Message, session: AsyncSession) -> None:
             f"<b>Глобальные супер-админы (.env):</b>\n<code>{', '.join(map(str, superadmins)) or 'Не заданы'}</code>\n\n"
             f"<b>Белый список чата ({len(whitelist)}):</b>\n<code>{', '.join(map(str, whitelist)) or 'Пуст'}</code>\n\n"
             "<b>Команды управления:</b>\n"
-            "• <code>/admin add &lt;ID&gt;</code> — добавить пользователя в белый список\n"
-            "• <code>/admin remove &lt;ID&gt;</code> — удалить из белого списка\n"
-            "• <code>/admin list</code> — показать текущий список"
+            "• <code>/admin add &lt;ID&gt;</code>: добавить в белый список\n"
+            "• <code>/admin remove &lt;ID&gt;</code>: удалить из белого списка\n"
+            "• <code>/admin list</code>: показать текущий список"
         )
         await message.reply(text=text)
         return

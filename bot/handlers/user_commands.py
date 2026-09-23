@@ -32,8 +32,8 @@ async def handle_user_home_callback(callback: CallbackQuery, session: AsyncSessi
 
     text = (
         f"<b>Здравствуйте, {user_name}!</b>\n\n"
-        "<b>TelegramWarden</b> — это система интеллектуальной защиты и модерации чатов.\n\n"
-        "Здесь вы можете посмотреть свой профиль, проверить статус предупреждений в группах и ознакомиться с правилами безопасности."
+        "<b>TelegramWarden</b> следит за порядком в чатах и фильтрует спам.\n\n"
+        "Здесь можно проверить свои предупреждения в группах и правила чатов."
     )
     is_admin = is_superadmin(user_id)
     await callback.message.edit_text(
@@ -53,7 +53,6 @@ async def handle_user_profile_callback(callback: CallbackQuery, session: AsyncSe
     username_str = f"@{callback.from_user.username}" if callback.from_user.username else "Не задан"
     now = datetime.now(timezone.utc)
 
-    # Aggregate violations and active warns across all chats
     res_stats = await session.execute(
         select(
             func.count(User.id),
@@ -63,7 +62,6 @@ async def handle_user_profile_callback(callback: CallbackQuery, session: AsyncSe
     )
     chats_count, total_violations, avg_rep = res_stats.first() or (0, 0, 100.0)
 
-    # Active warns count
     res_active_warns = await session.execute(
         select(func.count(Warn.id))
         .join(User, Warn.user_id == User.id)
@@ -84,7 +82,7 @@ async def handle_user_profile_callback(callback: CallbackQuery, session: AsyncSe
         f"• <b>Рейтинг доверия:</b> <code>{int(avg_rep)}/100</code>\n"
         f"• <b>Групп с вашим участием:</b> {chats_count}\n"
         f"• <b>Активных предупреждений:</b> <b>{active_warns}</b>\n\n"
-        "<i>Соблюдайте правила сообществ, чтобы поддерживать высокий рейтинг доверия!</i>"
+        "<i>Рейтинг доверия снижается при нарушениях и восстанавливается со временем.</i>"
     )
 
     back_kb = InlineKeyboardMarkup(
@@ -176,18 +174,18 @@ async def handle_user_help_callback(callback: CallbackQuery) -> None:
     text = (
         "<b> Доступные команды бота:</b>\n\n"
         "<b>Для всех участников (в группах):</b>\n"
-        "• <code>/me</code> или <code>/profile</code> — показать свой профиль и варны в этом чате\n"
-        "• <code>/rules</code> — правила сообщества\n"
-        "• <code>/report</code> (в ответ на сообщение) — пожаловаться админам на спам\n\n"
+        "• <code>/me</code>, <code>/profile</code>: профиль и предупреждения в этом чате\n"
+        "• <code>/rules</code>: правила сообщества\n"
+        "• <code>/report</code> (в ответ на сообщение): пожаловаться на спам\n\n"
         "<b>Для администраторов (в группах):</b>\n"
-        "• <code>/warn [причина]</code> (в ответ) — выдать предупреждение\n"
-        "• <code>/unwarn</code> (в ответ) — снять предупреждение\n"
-        "• <code>/clearwarns</code> (в ответ) — очистить все варны пользователя\n"
-        "• <code>/mute [время, напр. 30m, 2h, 1d]</code> (в ответ) — выдать мут\n"
-        "• <code>/unmute</code> (в ответ) — снять мут\n"
-        "• <code>/ban [причина]</code> (в ответ) — заблокировать участника\n"
-        "• <code>/admin</code> — управление доверенными администраторами\n"
-        "• <code>/settings</code> — настройки модерации и фильтров"
+        "• <code>/warn [причина]</code> (в ответ): выдать предупреждение\n"
+        "• <code>/unwarn</code> (в ответ): снять предупреждение\n"
+        "• <code>/clearwarns</code> (в ответ): очистить все варны пользователя\n"
+        "• <code>/mute [время, напр. 30m, 2h, 1d]</code> (в ответ): выдать мут\n"
+        "• <code>/unmute</code> (в ответ): снять мут\n"
+        "• <code>/ban [причина]</code> (в ответ): заблокировать нарушителя\n"
+        "• <code>/admin</code>: управление администраторами\n"
+        "• <code>/settings</code>: настройки модерации и фильтров"
     )
     back_kb = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -259,8 +257,7 @@ async def handle_in_chat_rules_command(message: Message) -> None:
         "<b> Правила сообщества</b>\n\n"
         "• Запрещены спам, несогласованная реклама и промо-ссылки.\n"
         "• Запрещены прямые оскорбления, травля и агрессивный мат.\n"
-        "• Запрещены вредоносные ссылки, крипто-скам и 18+ контент.\n\n"
-        "<i>Бот TelegramWarden круглосуточно следит за порядком в чате.</i>"
+        "• Запрещены вредоносные ссылки, крипто-скам и 18+ контент."
     )
     await message.reply(text=text)
 
@@ -284,7 +281,6 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
     target_id = target_user.id
     snippet = (target_msg.text or target_msg.caption or "[Медиафайл]")[:300]
 
-    # Fetch Chat DB
     res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
     chat_db = res_c.scalar_one_or_none()
     if not chat_db:
@@ -294,9 +290,8 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
 
     report_mode = getattr(chat_db, 'report_mode', 'admin_only') or 'admin_only'
 
-    # MODE 1: Instant AI Verification
     if report_mode == "ai_instant":
-        status_msg = await message.reply(" Жалоба принята. Проверяю сообщение через нейросеть...")
+        status_msg = await message.reply("Жалоба принята, проверяю сообщение...")
         raw_text = target_msg.text or target_msg.caption or ""
         sanitized = TextSanitizer.sanitize(raw_text)
 
@@ -308,13 +303,11 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
         )
 
         if verdict.is_violation:
-            # Delete reported message
             try:
                 await target_msg.delete()
             except Exception:
                 pass
 
-            # Sanction the offender (target_user)
             user_db = await SanctionsExecutor.get_or_create_user(
                 session=session,
                 chat_id=chat_id,
@@ -323,7 +316,6 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
                 first_name=target_user.first_name,
             )
 
-            # Apply sanction
             if verdict.suggested_action == "ban_user" or verdict.category.value in ["crypto_scam", "illegal_contraband"]:
                 await SanctionsExecutor.ban_user(message.bot, session, chat_id, user_db, reason=verdict.reason)
                 sanction_text = f"нарушитель <b>{target_name}</b> заблокирован"
@@ -336,7 +328,7 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
             await session.commit()
             await status_msg.edit_text(
                 f" <b>Спасибо за жалобу, {reporter_name}!</b>\n\n"
-                f"ИИ подтвердил нарушение (<code>{verdict.category.value}</code>, {verdict.confidence}%).\n"
+                f"Нарушение подтвердилось: <code>{verdict.category.value}</code>.\n"
                 f"Сообщение удалено, {sanction_text}."
             )
             return
@@ -347,7 +339,6 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
             )
             return
 
-    # MODE 2: Admin-Only Review (Dispatch verification card to Admins/Log Channel)
     log_channel = chat_db.log_channel_id
 
     report_text = (
@@ -355,7 +346,7 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
         f"• <b>Чат:</b> {message.chat.title or chat_id}\n"
         f"• <b>Автор жалобы:</b> {reporter_name} (ID: <code>{reporter.id if reporter else 0}</code>)\n"
         f"• <b>Нарушитель:</b> {target_name} (ID: <code>{target_id}</code>)\n"
-        f"• <b>Текст СМС:</b> <i>«{snippet}»</i>"
+        f"• <b>Текст сообщения:</b> <i>«{snippet}»</i>"
     )
 
     report_kb = InlineKeyboardMarkup(
@@ -380,10 +371,10 @@ async def handle_in_chat_report_command(message: Message, session: AsyncSession)
     if log_channel:
         try:
             await message.bot.send_message(chat_id=log_channel, text=report_text, reply_markup=report_kb)
-            await message.reply(" Жалоба успешно отправлена администраторам в журнал модерации.")
+            await message.reply("Жалоба отправлена администраторам.")
             return
         except Exception:
             pass
 
-    await message.reply(" Жалоба принята. Администраторы уведомлены.", reply_markup=report_kb)
+    await message.reply("Жалоба принята. Администраторы уведомлены.", reply_markup=report_kb)
 

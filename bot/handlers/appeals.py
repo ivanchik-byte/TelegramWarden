@@ -35,7 +35,6 @@ async def handle_open_appeal_callback(callback: CallbackQuery, session: AsyncSes
         return
     caller_id = callback.from_user.id
 
-    # Fetch audit log entry
     result = await session.execute(select(AuditLog).where(AuditLog.id == log_id))
     log_entry = result.scalar_one_or_none()
 
@@ -57,7 +56,6 @@ async def handle_open_appeal_callback(callback: CallbackQuery, session: AsyncSes
     except Exception:
         pass
 
-    # Notify all superadmins in DM about the appeal
     caller_name = callback.from_user.full_name or callback.from_user.username or str(caller_id)
     appeal_text = (
         "<b>Новая апелляция на модерацию!</b>\n\n"
@@ -81,7 +79,6 @@ async def handle_open_appeal_callback(callback: CallbackQuery, session: AsyncSes
         except Exception as err:
             logger.debug(f"Failed to send appeal alert to superadmin {superadmin_id}: {err}")
 
-    # Update group card status
     if callback.message:
         try:
             await callback.message.edit_text(
@@ -111,13 +108,11 @@ async def handle_appeal_accept(callback: CallbackQuery, session: AsyncSession) -
         await callback.answer("У вас нет прав для одобрения апелляций.", show_alert=True)
         return
 
-    # Unban in Telegram
     try:
         await callback.bot.unban_chat_member(chat_id=chat_id, user_id=target_user_id, only_if_banned=True)
     except Exception as err:
         logger.warning(f"Failed to unban user {target_user_id} in {chat_id}: {err}")
 
-    # Remove warns from database
     u_res = await session.execute(select(User).where(User.telegram_id == target_user_id, User.chat_id == chat_id))
     user_db = u_res.scalar_one_or_none()
     if user_db:

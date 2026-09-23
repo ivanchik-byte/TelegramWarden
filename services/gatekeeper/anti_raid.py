@@ -34,7 +34,7 @@ class AntiRaidDetector:
             lockdown_key = f"{REDIS_RAID_LOCKDOWN_PREFIX}{chat_id}"
             joins_key = f"{REDIS_RAID_JOIN_PREFIX}{chat_id}"
 
-            # Check if chat is already under active lockdown
+            # Short-circuit early if chat is already under lockdown to avoid unnecessary sliding-window updates
             lockdown_val = await redis.get(lockdown_key)
             if lockdown_val is not None:
                 return AntiRaidStatus(is_under_raid=True, join_count_in_window=999, lockdown_active=True)
@@ -42,7 +42,7 @@ class AntiRaidDetector:
             now = time.time()
             cutoff = now - window_seconds
 
-            # Add current join timestamp to sorted set
+            # Atomic sliding window in Redis ZSET: purge expired timestamps, record current hit, and fetch set size
             pipe = redis.pipeline()
             pipe.zremrangebyscore(joins_key, "-inf", cutoff)
             pipe.zadd(joins_key, {str(now): now})
@@ -52,7 +52,7 @@ class AntiRaidDetector:
 
             join_count = results[2]
 
-            # Check if threshold is breached
+            # Trip lockdown once join rate exceeds threshold; lockdown key TTL handles automatic cooldown
             if join_count >= threshold_joins:
                 logger.warning(
                     f"Raid detected in chat {chat_id}! {join_count} joins in {window_seconds}s. Activating lockdown."

@@ -47,10 +47,8 @@ async def handle_admin_unban(callback: CallbackQuery, session: AsyncSession) -> 
         return
 
     try:
-        # Unban in Telegram
         await callback.bot.unban_chat_member(chat_id=chat_id, user_id=telegram_id, only_if_banned=True)
 
-        # Update User in DB
         res_u = await session.execute(
             select(User).where(User.chat_id == chat_id, User.telegram_id == telegram_id)
         )
@@ -60,7 +58,6 @@ async def handle_admin_unban(callback: CallbackQuery, session: AsyncSession) -> 
             user_db.ban_reason = None
             user_db.banned_at = None
 
-        # Update AuditLog
         audit_entry = await session.get(AuditLog, log_id)
         if audit_entry:
             audit_entry.reviewed_by_admin_id = admin_id
@@ -99,7 +96,6 @@ async def handle_admin_unwarn(callback: CallbackQuery, session: AsyncSession) ->
         return
 
     try:
-        # Deactivate latest active warn
         res_u = await session.execute(
             select(User).where(User.chat_id == chat_id, User.telegram_id == telegram_id)
         )
@@ -114,7 +110,6 @@ async def handle_admin_unwarn(callback: CallbackQuery, session: AsyncSession) ->
             if warn_db:
                 warn_db.is_active = False
 
-        # Update AuditLog
         audit_entry = await session.get(AuditLog, log_id)
         if audit_entry:
             audit_entry.reviewed_by_admin_id = admin_id
@@ -250,7 +245,7 @@ async def handle_admin_false_positive(callback: CallbackQuery, session: AsyncSes
         admin_name = callback.from_user.first_name or f"Admin {admin_id}"
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.reply(text=f" Действие помечено как ложное срабатывание администратором {admin_name}.")
-        await callback.answer(text="Отметка о ложном срабатывании сохранена для улучшения ИИ!")
+        await callback.answer(text="Отметка о ложном срабатывании сохранена.")
         logger.info(f"Admin {admin_id} marked log {log_id} as false positive")
 
     except Exception as err:

@@ -161,9 +161,9 @@ TelegramWarden/
          |
          v
 [Этап 4: Нейросетевой анализ (AIDispatcher)]
-  - Tier-1 (опционально, JEV_ENABLED): TypeSafe Jev triage — noul +
+  - Tier-1 (опционально, JEV_ENABLED): TypeSafe Jev triage: noul +
     choice по 9 категориям за один проход (~150-400 мс). Чистые
-    (prob < 0.03) получают Fast-Pass без LLM; метрики — logs/jev_triage.jsonl.
+    (prob < 0.03) получают Fast-Pass без LLM; запись метрик: logs/jev_triage.jsonl.
     Критичные категории и скрытые ссылки эскалируются всегда
   - Tier-2: первичный провайдер DeepSeek Chat (OpenAI-compatible)
   - Резервный провайдер: Groq Llama 3.3 70B (автопереключение при таймауте)

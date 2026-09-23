@@ -65,7 +65,7 @@ class NSFWDetector:
             with urllib.request.urlopen(req, timeout=40) as resp:
                 content = resp.read(MAX_DOWNLOAD_BYTES + 1)
                 if len(content) > MAX_DOWNLOAD_BYTES:
-                    logger.error("OpenNSFW download exceeds size cap — aborting.")
+                    logger.error("OpenNSFW download exceeds size cap: aborting.")
                     return
                 actual_sha = hashlib.sha256(content).hexdigest()
                 if actual_sha.lower() != expected_sha.lower():

@@ -122,7 +122,6 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     if chat_id > 0 or not message.from_user:
         return
 
-    # 1. Load chat configuration
     result = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
     chat_db = result.scalar_one_or_none()
     if not chat_db or not chat_db.is_active:
@@ -132,7 +131,7 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     if user_id in (chat_db.whitelisted_users or []):
         return
 
-    # 2. Anti-channel / anti-inline-bot source guards (same policy as text path)
+    # Anti-channel and anti-inline-bot source guards (same policy as text path)
     if not await enforce_source_guards(message, chat_db):
         return
 
@@ -146,7 +145,7 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     await SanctionsExecutor.lock_user(session, user_db)
     user_db.message_count += 1
 
-    # 3. Newbie media lock: newcomers cannot post media for N hours
+    # Newbie media lock: newcomers cannot post media for N hours
     lock_hours = chat_db.newbie_media_lock_hours or 0
     if lock_hours > 0:
         age_hours = (datetime.now(timezone.utc) - user_db.first_seen_at).total_seconds() / 3600
@@ -163,17 +162,16 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
                 logger.debug(f"Failed to send newbie lock notice: {notify_err}")
             return
 
-    # 4. Determine media target and download into memory (no disk write)
     # Animated TGS (Lottie) stickers cannot be decoded by any local scanner:
-    # they must not silently pass — delete and hand to admin review.
+    # they must not silently pass; delete and hand to admin review.
     if message.sticker and getattr(message.sticker, "is_animated", False):
-        logger.info(f"Animated TGS sticker from {user_id} in {chat_id} — unscannable, held for review")
+        logger.info(f"Animated TGS sticker from {user_id} in {chat_id}: unscannable, held for review")
         await _hold_for_review(
             bot=message.bot, session=session, chat_db=chat_db, user_db=user_db,
             user_name=message.from_user.full_name, user_id=user_id,
             message_id=message.message_id,
             action_type="review_required", category=ViolationCategory.ADULT_NSFW.value,
-            reason="[TGS] Анимированный стикер не поддается локальному скану — проверьте вручную",
+            reason="[TGS] Анимированный стикер отправлен на проверку администраторам",
             card_reason="Анимированный стикер удалён: локальный скан недоступен",
             confidence=0.0, preview="[TGS STICKER]",
         )
@@ -191,7 +189,7 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
         logger.warning(f"Failed to download media for inspection: {download_err}")
         return
 
-    # 4. Caption text follows the exact same moderation policy as plain text.
+    # Caption text follows the exact same moderation policy as plain text.
     # A caption hit does NOT skip the image scan: compound violations (e.g. NSFW + spam caption)
     # must still reach the NSFW pipeline for logging and pHash registry, but duplicate
     # punitive sanctions on the same message must be avoided.
@@ -208,8 +206,6 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
             raw_text=caption_text,
         )
 
-
-    # 5. Run local media pipeline honoring per-chat scanner toggles.
     # Animations (MP4/GIF) and video stickers (webm) need keyframe sampling,
     # otherwise PIL cannot decode them and they would silently bypass the scan.
     is_motion_media = bool(
@@ -236,13 +232,13 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
             (datetime.now(timezone.utc) - user_db.first_seen_at).days < 3
         )
         if is_newcomer and not low_res_scan and not verdict.nsfw_checked:
-            logger.warning(f"NSFW scan unavailable for newcomer media in {chat_id}, user {user_id} — holding for review")
+            logger.warning(f"NSFW scan unavailable for newcomer media in {chat_id}, user {user_id}: holding for review")
             await _hold_for_review(
                 bot=message.bot, session=session, chat_db=chat_db, user_db=user_db,
                 user_name=message.from_user.full_name, user_id=user_id,
                 message_id=message.message_id,
                 action_type="review_required", category=ViolationCategory.ADULT_NSFW.value,
-                reason="[Fail-closed] Медиа новичка не удалось просканировать — проверьте вручную",
+                reason="[Fail-closed] Медиа новичка отправлено на ручную проверку",
                 card_reason="Медиа новичка удалено: сканер был недоступен",
                 confidence=0.0, preview=f"[{str(media_type).upper()}] NSFW-скан недоступен",
             )
@@ -263,7 +259,7 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     preview = f"[{str(media_type).upper()}] {verdict.reason}"
 
     # Night mode: defer ONLY soft admin-review signals (QR/OCR). Deterministic
-    # evidence — NSFW detections and known-spam pHash fingerprints — stays
+    # evidence (NSFW detections and known-spam pHash fingerprints) stays
     # enforced around the clock, matching the policy comment below.
     if is_night_mode_active(chat_db) and verdict.requires_admin_review:
         logger.info(f"Night mode active in chat {chat_id}: media sanction deferred for user {user_id}")
@@ -273,13 +269,13 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
             message_id=message.message_id,
             action_type="night_mode_review", category=cat_key,
             reason=f"[Ночной режим] {verdict.reason}",
-            card_reason=f"{verdict.reason} (ночной режим — санкция отложена)",
+            card_reason=f"{verdict.reason} (ночной режим: санкция отложена)",
             confidence=verdict.confidence, preview=preview,
             delete_first=False,
         )
         return
 
-    # 5. Delete offending message in all enforcement paths
+    # Delete offending message before applying punitive actions
     await SanctionsExecutor.delete_message(message.bot, chat_id, message.message_id)
 
     action_title = "Удаление сообщения"
@@ -349,12 +345,10 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
             bot=message.bot, session=session, chat_db=chat_db, user_db=user_db,
             reason=verdict.reason, category=cat_key, message_id=message.message_id,
         )
-        action_title = "Удаление + Варн"
+        action_title = "Удаление и варн"
         action_type = "warn"
         is_ban_action = False
 
-
-    # 6. Record in Audit Logs
     audit_entry = AuditLog(
         chat_id=chat_id,
         user_id=user_db.id,
@@ -367,7 +361,6 @@ async def handle_media_message(message: Message, session: AsyncSession) -> None:
     session.add(audit_entry)
     await session.flush()
 
-    # 7. Group notice with appeal button + admin review card (parity with text path)
     await send_group_moderation_notice(
         bot=message.bot, chat_id=chat_id, user_name=user_name, user_id=user_id,
         action_title=action_title, category=cat_key, confidence=verdict.confidence,
@@ -418,7 +411,7 @@ async def handle_document_message(message: Message, session: AsyncSession) -> No
     mime = (document.mime_type or "").lower()
     file_size = document.file_size or 0
 
-    # Caption moderation first — identical policy to the plain-text path
+    # Caption moderation first: identical policy to the plain-text path
     if message.caption:
         handled = await moderate_text_content(
             bot=message.bot,
@@ -431,12 +424,12 @@ async def handle_document_message(message: Message, session: AsyncSession) -> No
         if handled:
             return
 
-    # Download first, then trust the bytes — declared MIME is attacker-
+    # Download first, then trust the bytes: declared MIME is attacker-
     # controlled (application/octet-stream is a classic NSFW disguise)
     if file_size > MAX_ORIGINAL_SCAN_BYTES:
         # Oversized files cannot be scanned locally; they are NOT deleted
         # (legit archives exist) but admins must see them, not silence.
-        logger.info(f"Oversized document {document.file_name!r} ({file_size} bytes) in {chat_id} — flagged for review")
+        logger.info(f"Oversized document {document.file_name!r} ({file_size} bytes) in {chat_id}: flagged for review")
         audit_entry = AuditLog(
             chat_id=chat_id,
             user_id=user_db.id,
@@ -452,7 +445,7 @@ async def handle_document_message(message: Message, session: AsyncSession) -> No
             bot=message.bot, chat_db=chat_db, user_name=message.from_user.full_name, user_id=user_id,
             message_preview=f"[DOCUMENT {(document.file_name or '')[:60]}] {file_size} bytes",
             category=ViolationCategory.OTHER_VIOLATION.value, confidence=0.0,
-            reason="Крупный файл не поддается локальному сканированию — проверьте вручную",
+            reason="Файл слишком большой для автоматической проверки, требуется ручной просмотр",
             audit_entry_id=audit_entry.id,
         )
         return

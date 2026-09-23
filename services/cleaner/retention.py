@@ -36,7 +36,7 @@ class DataRetentionWorker:
         """Scrub raw message snippets older than the retention period.
 
         Returns the archived records for the caller to persist AFTER the DB
-        transaction commits — writing the archive before the commit meant a
+        transaction commits: writing the archive before the commit meant a
         rollback would leave rows alive and get them archived again.
         """
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)

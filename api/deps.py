@@ -28,7 +28,7 @@ def require_superadmin(user: TelegramUser) -> None:
 async def verify_chat_access(chat_id: int, user_id: int, session: AsyncSession) -> None:
     # 403 on missing chat on purpose: never reveal which chat_ids exist.
     # WebApp access is an explicit grant (whitelisted_users), revoked by a
-    # superadmin editing the list — not a live Telegram admin status, the API
+    # superadmin editing the list, not a live Telegram admin status: the API
     # has no Bot instance to call get_chat_member with.
     if is_superadmin(user_id):
         return

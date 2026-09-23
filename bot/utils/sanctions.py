@@ -109,7 +109,6 @@ class SanctionsExecutor:
         # counter values before mutating them
         await cls.lock_user(session, user_db)
 
-        # 1. Create Warn entry with chat-configured expiration
         exp_days = getattr(chat_db, 'warn_expiration_days', 7) or 7
         warn = Warn(
             user_id=user_db.id,
@@ -125,7 +124,6 @@ class SanctionsExecutor:
         user_db.reputation_score = max(0, user_db.reputation_score - 15)
         await session.flush()
 
-        # 2. Count active warns
         count_res = await session.execute(
             select(func.count(Warn.id)).where(
                 Warn.user_id == user_db.id,
@@ -136,12 +134,10 @@ class SanctionsExecutor:
         )
         active_warns_count = count_res.scalar_one()
 
-        # 3. Check if warn limit is exceeded
         warn_limit = chat_db.warn_limit or 3
         if active_warns_count >= warn_limit:
             logger.info(f"User {user_db.telegram_id} reached warn limit ({active_warns_count}/{chat_db.warn_limit})")
 
-            # Deactivate used warns
             warns_to_deactivate = await session.execute(
                 select(Warn).where(
                     Warn.user_id == user_db.id,
@@ -155,7 +151,6 @@ class SanctionsExecutor:
             if chat_db.warn_punishment == "ban":
                 await cls.ban_user(bot, session, chat_db.chat_id, user_db, reason="Превышен лимит предупреждений")
             else:
-                # Default: Mute for configured duration (guard NULL column)
                 duration = chat_db.warn_mute_duration_minutes or 1440
                 await cls.mute_user(
                     bot=bot,
@@ -166,7 +161,6 @@ class SanctionsExecutor:
                     reason=f"Превышен лимит предупреждений ({chat_db.warn_limit}/{chat_db.warn_limit})",
                 )
         else:
-            # Notify in chat with clean Russian text (no emojis)
             try:
                 name = user_db.first_name or f"User {user_db.telegram_id}"
                 await bot.send_message(

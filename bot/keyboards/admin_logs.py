@@ -41,7 +41,7 @@ def get_admin_appeal_review_keyboard(
             ],
             [
                 InlineKeyboardButton(
-                    text="Ложное срабатывание ИИ",
+                    text="Ложное срабатывание",
                     callback_data=f"log:false_pos:{log_id}",
                 )
             ],

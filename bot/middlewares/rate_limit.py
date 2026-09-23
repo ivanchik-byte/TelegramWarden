@@ -40,6 +40,7 @@ class RateLimitMiddleware(BaseMiddleware):
             now = time.time()
             cutoff = now - self.window_seconds
 
+            # Sliding window in Redis ZSET: evict expired message timestamps, register current hit, and fetch window count
             pipe = redis.pipeline()
             pipe.zremrangebyscore(key, "-inf", cutoff)
             pipe.zadd(key, {str(now): now})

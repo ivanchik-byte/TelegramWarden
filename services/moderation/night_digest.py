@@ -59,7 +59,7 @@ async def process_chat_digest(bot, session, chat_db: Chat) -> None:
 
     total = sum(count for _, _, count in rows)
     lines = "\n".join(
-        f"• {name} (<code>{telegram_id}</code>) — {count} наруш." for telegram_id, name, count in rows
+        f"• {name} (<code>{telegram_id}</code>): {count} наруш." for telegram_id, name, count in rows
     )
     text = (
         " <b>TelegramWarden | Итоги ночного режима</b>\n\n"

@@ -55,7 +55,6 @@ async def handle_manual_warn_command(message: Message, session: AsyncSession) ->
     admin_user = message.from_user
     admin_id = admin_user.id if admin_user else 0
 
-    # Fetch Chat DB
     res_c = await session.execute(select(Chat).where(Chat.chat_id == chat_id))
     chat_db = res_c.scalar_one_or_none()
     if not chat_db:
@@ -75,16 +74,13 @@ async def handle_manual_warn_command(message: Message, session: AsyncSession) ->
         await message.reply("Ботам нельзя выдавать предупреждения.")
         return
 
-    # Check if target is admin
     if await is_chat_admin(message.bot, chat_id, target_user.id, chat_db):
         await message.reply("Нельзя выдать предупреждение администратору чата.")
         return
 
-    # Parse reason
     parts = (message.text or "").split(maxsplit=1)
     reason = parts[1] if len(parts) > 1 else "Нарушение правил чата"
 
-    # Get target user record in DB
     user_db = await SanctionsExecutor.get_or_create_user(
         session=session,
         chat_id=chat_id,
@@ -93,7 +89,6 @@ async def handle_manual_warn_command(message: Message, session: AsyncSession) ->
         first_name=target_user.first_name,
     )
 
-    # Apply warning
     active_count = await SanctionsExecutor.apply_warn(
         bot=message.bot,
         session=session,
@@ -104,7 +99,6 @@ async def handle_manual_warn_command(message: Message, session: AsyncSession) ->
         message_id=message.reply_to_message.message_id,
     )
 
-    # Record AuditLog
     audit_entry = AuditLog(
         chat_id=chat_id,
         user_id=user_db.id,
@@ -274,7 +268,7 @@ async def handle_manual_mute_command(message: Message, session: AsyncSession) ->
     admin_name = quote(message.from_user.first_name) if message.from_user else "Admin"
     if not mute_applied:
         await message.reply(
-            f"️ <b>Не удалось замутить {quote(target_user.first_name)}</b> — проверьте права бота "
+            f"⚠️ <b>Не удалось замутить {quote(target_user.first_name)}</b>: проверьте права бота "
             f"(бот должен быть администратором с правом ограничивать участников)."
         )
         return
@@ -371,7 +365,7 @@ async def handle_manual_ban_command(message: Message, session: AsyncSession) -> 
     admin_name = quote(message.from_user.first_name) if message.from_user else "Admin"
     if not ban_applied:
         await message.reply(
-            f"️ <b>Не удалось забанить {quote(target_user.first_name)}</b> — проверьте права бота "
+            f"⚠️ <b>Не удалось забанить {quote(target_user.first_name)}</b>: проверьте права бота "
             f"(бот должен быть администратором с правом блокировать участников)."
         )
         return

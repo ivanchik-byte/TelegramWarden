@@ -47,8 +47,8 @@ CONFUSABLES_MAP = {
 
 
 # Regex for Zero-Width and invisible characters.
-# Includes Unicode tag characters (U+E0000-E007F) — the classic carrier of
-# hidden links/data in Telegram — and variation selectors (U+FE00-FE0F).
+# Includes Unicode tag characters (U+E0000-E007F), which are frequently used
+# to smuggle hidden links or payloads in Telegram, and variation selectors (U+FE00-FE0F).
 ZERO_WIDTH_PATTERN = re.compile(
     r"[\u200B-\u200D\uFEFF\u2060\u200E\u200F\u00AD\u202A-\u202E\u2066-\u2069"
     r"\uFE00-\uFE0F\U000E0000-\U000E007F]"
@@ -86,18 +86,16 @@ class TextSanitizer:
                 had_invisible_characters=False,
             )
 
-        # 1. Detect and strip Zero-Width & RTL characters
         had_invisible = bool(ZERO_WIDTH_PATTERN.search(raw_text))
         clean_text = ZERO_WIDTH_PATTERN.sub("", raw_text)
 
-        # 2. Unicode normalization and Confusables transliteration (NFKC decomposes combined glyphs)
+        # NFKC decomposes combined glyphs first so single-codepoint confusable substitutions match cleanly
         nfkc_text = unicodedata.normalize("NFKC", clean_text)
         normalized = "".join(CONFUSABLES_MAP.get(ch, ch) for ch in nfkc_text)
 
-        # 3. Extract hidden URLs from Markdown and HTML formatting
         extracted_urls: list[str] = []
 
-        # Extract markdown links and replace them with inner text for clean bare URL scanning
+        # Replace markdown links with their inner anchor text so downstream tokenizers see clean prose
         def _extract_md(match: re.Match) -> str:
             url = match.group(2).rstrip(").,;\"'")
             if url not in extracted_urls:
@@ -106,7 +104,6 @@ class TextSanitizer:
 
         text_without_md = MARKDOWN_LINK_PATTERN.sub(_extract_md, normalized)
 
-        # Extract HTML links and replace with inner text
         def _extract_html(match: re.Match) -> str:
             url = match.group(1).rstrip(").,;\"'")
             if url not in extracted_urls:
@@ -115,16 +112,14 @@ class TextSanitizer:
 
         text_without_html = HTML_LINK_PATTERN.sub(_extract_html, text_without_md)
 
-        # Extract remaining bare URLs
         for match in BARE_URL_PATTERN.finditer(text_without_html):
             url = match.group(0).rstrip(").,;\"'>]")
             if url and url not in extracted_urls:
                 extracted_urls.append(url)
 
-        # 4. Extract @mentions
         extracted_usernames = list(dict.fromkeys(TELEGRAM_USERNAME_PATTERN.findall(normalized)))
 
-        # 5. Build Canonical Text (mapping lookalikes to Latin for keyword checking)
+        # Canonical text projects Cyrillic/Greek lookalikes onto Latin to avoid regex permutations
         canonical_chars = [HOMOGLYPH_MAP.get(ch, ch) for ch in normalized]
         canonical_text = "".join(canonical_chars)
 

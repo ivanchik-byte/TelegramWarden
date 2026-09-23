@@ -20,6 +20,9 @@ from services.ai.schema import SuggestedAction, ViolationCategory
 from services.moderation.night_mode import is_night_mode_active
 
 
+# Telegram Bot API entity offsets and lengths are expressed in UTF-16 code units.
+# Naive Python string slicing drifts on surrogate pairs (e.g. emojis); encoding
+# to UTF-16 LE ensures offsets match Telegram's exact byte positions.
 def _slice_utf16(text: str, offset: int, length: int) -> str:
     raw = text.encode("utf-16-le")
     return raw[offset * 2:(offset + length) * 2].decode("utf-16-le", errors="ignore")
@@ -158,12 +161,12 @@ async def moderate_text_content(
             message_preview=sanitized.clean_text,
             category=verdict.category.value,
             confidence=verdict.confidence,
-            reason=f"{source_label}{verdict.reason} (ночной режим — санкция отложена)",
+            reason=f"{source_label}{verdict.reason} (ночной режим: санкция отложена)",
             audit_entry_id=audit_entry.id,
         )
         return True
 
-    # 5. Execute action: delete message first, then apply punitive sanctions
+    # Delete message first before applying punitive sanctions
     await SanctionsExecutor.delete_message(bot, chat_id, message.message_id)
 
     # Custom category actions override default AI Judge behavior
@@ -175,7 +178,7 @@ async def moderate_text_content(
             bot=bot, session=session, chat_db=chat_db, user_db=user_db,
             reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
         )
-        action_title = "Удаление + Варн (По правилу чата)"
+        action_title = "Удаление и варн (по правилу чата)"
         action_type = "warn"
     elif custom_action == "mute":
         await SanctionsExecutor.mute_user(
@@ -183,11 +186,11 @@ async def moderate_text_content(
             duration_minutes=chat_db.warn_mute_duration_minutes or 1440,
             reason=f"{source_label}{verdict.reason}",
         )
-        action_title = "Удаление + МУТ (По правилу чата)"
+        action_title = "Удаление и мут (по правилу чата)"
         action_type = "mute_user"
     elif custom_action == "ban":
         await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=f"{source_label}{verdict.reason}")
-        action_title = "Удаление + БАН (По правилу чата)"
+        action_title = "Удаление и бан (по правилу чата)"
         action_type = "ban_user"
     else:
         # Autonomous AI Judge or Strategy Mode
@@ -199,7 +202,7 @@ async def moderate_text_content(
             )
             if can_ban_in_ai_judge:
                 await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=f"{source_label}{verdict.reason}")
-                action_title = "Удаление + БАН (Вердикт ИИ-Судьи)"
+                action_title = "Удаление и бан (автоматически)"
                 action_type = "ban_user"
             elif verdict.suggested_action == SuggestedAction.MUTE_USER:
                 await SanctionsExecutor.mute_user(
@@ -207,31 +210,31 @@ async def moderate_text_content(
                     duration_minutes=chat_db.warn_mute_duration_minutes or 1440,
                     reason=f"{source_label}{verdict.reason}",
                 )
-                action_title = "Удаление + МУТ (Вердикт ИИ-Судьи)"
+                action_title = "Удаление и мут (автоматически)"
                 action_type = "mute_user"
             elif verdict.suggested_action == SuggestedAction.DELETE_MESSAGE:
-                action_title = "Удаление (Вердикт ИИ-Судьи)"
+                action_title = "Удаление сообщения (автоматически)"
                 action_type = "delete"
             else:
                 await SanctionsExecutor.apply_warn(
                     bot=bot, session=session, chat_db=chat_db, user_db=user_db,
                     reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
                 )
-                action_title = f"Удаление + Варн (Вердикт ИИ-Судьи, {int(verdict.confidence)}%)"
+                action_title = f"Удаление и варн ({int(verdict.confidence)}%)"
                 action_type = "warn"
         elif mod_mode == "review_only":
             await SanctionsExecutor.apply_warn(
                 bot=bot, session=session, chat_db=chat_db, user_db=user_db,
                 reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
             )
-            action_title = f"Удаление + На рассмотрение (Мягкий режим, {int(verdict.confidence)}%)"
+            action_title = f"Удаление и рассмотрение ({int(verdict.confidence)}%)"
             action_type = "warn"
         elif is_severe_contraband or (
             not contraband_suspected and verdict.confidence >= ban_threshold
         ):
             # High Confidence Tier -> Ban (low-confidence contraband stays a warn)
             await SanctionsExecutor.ban_user(bot, session, chat_id, user_db, reason=f"{source_label}{verdict.reason}")
-            action_title = f"Удаление + БАН ({int(verdict.confidence)}% Уверенность)"
+            action_title = f"Удаление и бан ({int(verdict.confidence)}%)"
             action_type = "ban_user"
         else:
             # Review Tier -> Warn
@@ -239,7 +242,7 @@ async def moderate_text_content(
                 bot=bot, session=session, chat_db=chat_db, user_db=user_db,
                 reason=f"{source_label}{verdict.reason}", category=cat_key, message_id=message.message_id,
             )
-            action_title = f"Удаление + Предупреждение ({int(verdict.confidence)}% На проверке)"
+            action_title = f"Удаление и варн ({int(verdict.confidence)}%)"
             action_type = "warn"
 
     audit_entry = AuditLog(

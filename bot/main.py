@@ -49,27 +49,22 @@ async def main() -> None:
     """Initialize bot instance, register middlewares, attach routers and start bot + API."""
     logger.info("Starting TelegramWarden Unified Service (Bot + Mini App API)...")
 
-    # 0. Refuse to run with default secrets in production
     settings.validate_runtime_secrets()
 
-    # 1. Initialize Database & Redis
     await init_db()
     await redis_manager.get_client()
 
-    # 2. Create Bot and Dispatcher
     bot = Bot(
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher()
 
-    # 3. Register Global Middlewares
     dp.update.middleware(DBSessionMiddleware())
     dp.message.middleware(RateLimitMiddleware())
     # Edited messages are an equal flood vector: rate-limit them identically
     dp.edited_message.middleware(RateLimitMiddleware())
 
-    # 4. Attach Event Routers
     dp.include_router(start_router)
     dp.include_router(admin_panel_router)
     dp.include_router(private_scanner_router)
