@@ -43,6 +43,7 @@ class Chat(Base, TimestampMixin):
     ai_review_threshold: Mapped[float] = mapped_column(Float, default=50.0)                 # 50-85% review/warn
     ai_sampling_rate: Mapped[float] = mapped_column(Float, default=0.05)                    # 5% random sampling
     full_scan_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # 100% full scan
+    enable_jev_prefilter: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)  # Tier-1 fast triage
     category_actions: Mapped[dict] = mapped_column(JSON, default=lambda: {
         "toxic_insult": "ai_default",
         "commercial_ad": "ai_default",

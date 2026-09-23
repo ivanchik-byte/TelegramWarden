@@ -36,6 +36,7 @@ def _chat_to_response(chat_db: Chat) -> ChatSettingsResponseSchema:
         ai_review_threshold=getattr(chat_db, 'ai_review_threshold', 50.0),
         ai_sampling_rate=chat_db.ai_sampling_rate,
         full_scan_enabled=getattr(chat_db, 'full_scan_enabled', False),
+        enable_jev_prefilter=getattr(chat_db, 'enable_jev_prefilter', True),
         media_nsfw_filter_enabled=chat_db.media_nsfw_filter_enabled,
         media_qr_filter_enabled=chat_db.media_qr_filter_enabled,
         media_ocr_filter_enabled=chat_db.media_ocr_filter_enabled,
@@ -135,6 +136,7 @@ async def update_chat_settings(
         "media_ocr_filter_enabled",
         "moderation_mode", "category_actions",
         "ai_confidence_threshold", "ai_review_threshold", "ai_sampling_rate",
+        "enable_jev_prefilter",
     }
     forbidden = (privileged_fields | defense_fields).intersection(update_data)
     if not is_superadmin(user.id) and forbidden:
