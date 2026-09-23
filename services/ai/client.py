@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import math
+import os
 import re
 import time
 from typing import Optional
@@ -12,6 +13,7 @@ from openai import AsyncOpenAI
 
 from core.config import settings
 from core.logger import logger
+from services.ai.jev_client import CRITICAL_CATEGORIES, JevClient, JevTriageResult
 from services.ai.prompts import SYSTEM_MODERATION_PROMPT
 from services.ai.schema import (
     AIModerationVerdict,
@@ -25,6 +27,42 @@ JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECAS
 FAIL_OPEN_REASON = "AI Provider unavailable (fail-open to prevent false bans)"
 
 _TRUE_STRINGS = {"true", "1", "yes"}
+
+# Calibration log for Tier-1 triage: every Jev answer lands here, never in
+# AuditLog (a row per clean message would drown moderation history).
+JEV_TRIAGE_LOG = "logs/jev_triage.jsonl"
+JEV_TRIAGE_LOG_MAX_BYTES = 50 * 1024 * 1024
+
+
+def log_triage(chat_id: Optional[int], triage: "JevTriageResult", fast_pass: bool) -> None:
+    """Append one triage measurement for offline threshold calibration."""
+    try:
+        line = (
+            '{"ts": %d, "chat_id": %s, "prob": %.4f, "top_cat": "%s", '
+            '"latency_ms": %.1f, "fast_pass": %s}\n'
+            % (
+                int(time.time()),
+                chat_id if chat_id is not None else "null",
+                triage.is_violation_prob,
+                triage.top_category,
+                triage.latency_ms,
+                "true" if fast_pass else "false",
+            )
+        )
+        try:
+            if os.path.getsize(JEV_TRIAGE_LOG) > JEV_TRIAGE_LOG_MAX_BYTES:
+                for i in (3, 2):
+                    try:
+                        os.replace(f"{JEV_TRIAGE_LOG}.{i}", f"{JEV_TRIAGE_LOG}.{i + 1}")
+                    except OSError:
+                        pass
+                os.replace(JEV_TRIAGE_LOG, f"{JEV_TRIAGE_LOG}.1")
+        except OSError:
+            pass
+        with open(JEV_TRIAGE_LOG, "a", encoding="utf-8") as fh:
+            fh.write(line)
+    except Exception as err:
+        logger.debug(f"Jev triage log skipped: {err}")
 
 
 def normalize_confidence(conf: float) -> float:
@@ -108,6 +146,18 @@ class AIClientDispatcher:
                 timeout=httpx.Timeout(8.0, connect=2.0),
             )
 
+        # Tier-1 fast triage (TypeSafe Jev). Absent without key: the
+        # dispatcher then calls DeepSeek directly, as before.
+        self.jev_client: Optional[JevClient] = None
+        if settings.JEV_ENABLED and settings.TYPESAFE_API_KEY:
+            self.jev_client = JevClient(
+                api_key=settings.TYPESAFE_API_KEY,
+                base_url=settings.JEV_BASE_URL,
+                model=settings.JEV_MODEL,
+                timeout_seconds=settings.JEV_TIMEOUT_SECONDS,
+                max_concurrent=settings.JEV_MAX_CONCURRENT,
+            )
+
     @classmethod
     def _extract_and_parse_json(cls, raw_content: str) -> AIModerationVerdict:
         """Extract JSON block and parse into strict Pydantic model with calibrated threat risk."""
@@ -171,6 +221,8 @@ class AIClientDispatcher:
         chat_context: Optional[list[str]] = None,
         cache_chat_id: Optional[int] = None,
         cache_user_id: Optional[int] = None,
+        jev_prefilter: bool = True,
+        has_hidden_entities: bool = False,
     ) -> AIModerationVerdict:
         """Analyze message intent and return structured moderation verdict.
 
@@ -184,12 +236,40 @@ class AIClientDispatcher:
         if cached and time.monotonic() - cached[0] < self.CACHE_TTL_SECONDS:
             return cached[1]
 
+        triage_hint = ""
+        jev_latency: Optional[float] = None
+        if jev_prefilter and self.jev_client:
+            triage = await self.jev_client.triage(message_text)
+            if triage is not None:
+                jev_latency = triage.latency_ms
+                if self._jev_fast_pass(triage, has_hidden_entities):
+                    log_triage(cache_chat_id, triage, fast_pass=True)
+                    return self._cache_verdict(
+                        cache_key,
+                        AIModerationVerdict(
+                            is_violation=False,
+                            category=ViolationCategory.CLEAN,
+                            confidence=1.0,
+                            reason="[Jev Fast-Pass] Сообщение чистое",
+                            suggested_action=SuggestedAction.PASS_MESSAGE,
+                            triaged_by_jev=True,
+                            jev_latency_ms=triage.latency_ms,
+                        ),
+                    )
+                log_triage(cache_chat_id, triage, fast_pass=False)
+                triage_hint = (
+                    "Preliminary triage hint from fast classifier: "
+                    f"{triage.top_category} ({triage.is_violation_prob:.0%})."
+                )
+
         # Construct user prompt with optional context.
         # The payload is wrapped as untrusted data: the model must treat
         # anything between the markers as content, never as instructions.
         prompt_parts = []
         if user_info:
             prompt_parts.append(f"User context (system-generated): {user_info}")
+        if triage_hint:
+            prompt_parts.append(triage_hint)
         if chat_context:
             quoted = "\n".join(f"  - {line}" for line in chat_context[-3:])
             prompt_parts.append(
@@ -211,18 +291,43 @@ class AIClientDispatcher:
         async with self._semaphore:
             verdict = await self._dispatch_provider(messages)
 
+        if jev_latency is not None:
+            verdict.triaged_by_jev = True
+            verdict.jev_latency_ms = jev_latency
+
         # Fail-open verdicts must never be cached: one provider hiccup would
         # otherwise wave identical spam through every chat for the whole TTL.
         if not verdict.fail_open:
+            self._evict_if_full()
             self._cache[cache_key] = (time.monotonic(), verdict)
-            if len(self._cache) > self.CACHE_MAX_ENTRIES:
-                # Drop the oldest quarter instead of scanning for exact LRU order
-                for key in sorted(self._cache, key=lambda k: self._cache[k][0])[: self.CACHE_MAX_ENTRIES // 4]:
-                    self._cache.pop(key, None)
         else:
             self.fail_open_count += 1
             logger.warning(f"AI moderation fail-open (total: {self.fail_open_count}) — verdict NOT cached")
         return verdict
+
+    def _cache_verdict(self, cache_key: str, verdict: AIModerationVerdict) -> AIModerationVerdict:
+        self._evict_if_full()
+        self._cache[cache_key] = (time.monotonic(), verdict)
+        return verdict
+
+    def _evict_if_full(self) -> None:
+        if len(self._cache) > self.CACHE_MAX_ENTRIES:
+            # Drop the oldest quarter instead of scanning for exact LRU order
+            for key in sorted(self._cache, key=lambda k: self._cache[k][0])[: self.CACHE_MAX_ENTRIES // 4]:
+                self._cache.pop(key, None)
+
+    @staticmethod
+    def _jev_fast_pass(triage: JevTriageResult, has_hidden_entities: bool) -> bool:
+        if triage.is_violation_prob >= settings.JEV_FAST_PASS_THRESHOLD:
+            return False
+        if has_hidden_entities:
+            return False
+        # Any nonzero mass on a critical category forces LLM review, no
+        # matter how low the headline probability is.
+        return not any(
+            triage.category_probabilities.get(cat, 0.0) > 0.0
+            for cat in CRITICAL_CATEGORIES
+        )
 
     async def _dispatch_provider(self, messages: list[dict]) -> AIModerationVerdict:
         """Try the primary provider, then the fallback, then fail open."""
