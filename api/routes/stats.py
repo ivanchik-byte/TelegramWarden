@@ -2,7 +2,7 @@
 
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import TelegramUser, get_current_telegram_user
 from api.deps import verify_chat_access
@@ -22,41 +22,23 @@ async def get_chat_statistics(
     """Get aggregated moderation metrics and category breakdown."""
     await verify_chat_access(chat_id, user.id, session)
 
-    # 1. Total violations count
-    total_viol_res = await session.execute(
-        select(func.count(AuditLog.id)).where(AuditLog.chat_id == chat_id)
-    )
-    total_violations = total_viol_res.scalar() or 0
+    # Single aggregated scan instead of one COUNT per metric
+    agg = (
+        await session.execute(
+            select(
+                func.count(AuditLog.id),
+                func.sum(case((AuditLog.action_type == "ban_user", 1), else_=0)),
+                func.sum(case((AuditLog.action_type == "mute_user", 1), else_=0)),
+                func.sum(case((AuditLog.is_false_positive == True, 1), else_=0)),  # noqa: E712
+            ).where(AuditLog.chat_id == chat_id)
+        )
+    ).one()
+    total_violations, total_bans, total_mutes, false_positives = (int(v or 0) for v in agg)
 
-    # 2. Total warns issued
     total_warns_res = await session.execute(
         select(func.count(Warn.id)).where(Warn.chat_id == chat_id)
     )
     total_warns = total_warns_res.scalar() or 0
-
-    # 3. Bans count
-    bans_res = await session.execute(
-        select(func.count(AuditLog.id)).where(
-            AuditLog.chat_id == chat_id, AuditLog.action_type == "ban_user"
-        )
-    )
-    total_bans = bans_res.scalar() or 0
-
-    # 4. Mutes count
-    mutes_res = await session.execute(
-        select(func.count(AuditLog.id)).where(
-            AuditLog.chat_id == chat_id, AuditLog.action_type == "mute_user"
-        )
-    )
-    total_mutes = mutes_res.scalar() or 0
-
-    # 5. False positives count
-    fp_res = await session.execute(
-        select(func.count(AuditLog.id)).where(
-            AuditLog.chat_id == chat_id, AuditLog.is_false_positive == True  # noqa: E712
-        )
-    )
-    false_positives = fp_res.scalar() or 0
 
     # 6. Violations by category
     cat_res = await session.execute(

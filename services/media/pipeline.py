@@ -55,6 +55,18 @@ class MediaModerationVerdict(NamedTuple):
 class MediaModerationPipeline:
     """Orchestrates all media scanning steps with zero unnecessary token costs."""
 
+    # Frames are downscaled to this before inference: NSFW/QR/OCR need no
+    # more, and a 20 MB photo decodes into hundreds of MB otherwise.
+    MAX_FRAME_DIM = 1280
+    # OCR costs seconds per frame: two frames catch banner spam, five is latency.
+    MAX_OCR_FRAMES = 2
+
+    @classmethod
+    def _fit_frame(cls, img: Image.Image) -> Image.Image:
+        if max(img.size) > cls.MAX_FRAME_DIM:
+            img.thumbnail((cls.MAX_FRAME_DIM, cls.MAX_FRAME_DIM))
+        return img
+
     @classmethod
     async def process_media(
         cls,
@@ -100,7 +112,8 @@ class MediaModerationPipeline:
             def _decode_image() -> list[Image.Image]:
                 try:
                     with Image.open(io.BytesIO(media_bytes)) as pil_img:
-                        return [pil_img.convert("RGB")]
+                        img = pil_img.convert("RGB")
+                        return [MediaModerationPipeline._fit_frame(img)]
                 except Exception as err:
                     logger.warning(f"Failed to open image bytes: {err}")
                     return []
@@ -171,7 +184,7 @@ class MediaModerationPipeline:
 
         # B/C. QR and OCR — soft signals flagged for admin review only
         if scan_qr or scan_ocr:
-            for frame, frame_bytes in encoded_frames:
+            for idx, (frame, frame_bytes) in enumerate(encoded_frames):
                 # B. QR Code Scanner: any URL-bearing QR goes to admin review,
                 # never auto-sanctioned (legitimate menus/Wi-Fi/websites exist).
                 if scan_qr:
@@ -190,7 +203,7 @@ class MediaModerationPipeline:
                         )
 
                 # C. OCR Text Scanner (CPU-bound pytesseract -> thread pool)
-                if scan_ocr:
+                if scan_ocr and idx < MediaModerationPipeline.MAX_OCR_FRAMES:
                     ocr_result = await asyncio.to_thread(OCREngine.scan_image, frame)
                     if ocr_result.has_text and ocr_result.sanitized.extracted_urls:
                         logger.info("OCR detected URLs inside image banner")

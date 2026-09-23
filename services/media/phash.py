@@ -10,6 +10,10 @@ from core.logger import logger
 
 REDIS_PHASH_KEY = "warden:spam_hashes"
 
+# Spam fingerprint registry is checked with SMEMBERS + O(N) scan on every
+# photo: without a cap it grows forever and each check gets slower.
+MAX_SPAM_HASHES = 5000
+
 
 def _closest_match(target: str, candidates: list[str], max_distance: int) -> bool:
     try:
@@ -67,6 +71,8 @@ class PHashDeduplicator:
         try:
             redis = await redis_manager.get_client()
             await redis.sadd(REDIS_PHASH_KEY, phash_str)
+            if await redis.scard(REDIS_PHASH_KEY) > MAX_SPAM_HASHES:
+                await redis.spop(REDIS_PHASH_KEY)
             logger.info(f"Registered new spam pHash: {phash_str}")
         except Exception as err:
             logger.error(f"Failed to save spam pHash to Redis: {err}")

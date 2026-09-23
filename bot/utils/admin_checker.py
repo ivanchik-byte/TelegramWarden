@@ -1,13 +1,19 @@
 """Admin and role-based access verification utilities."""
 
 import asyncio
+import json
 from typing import Optional
 from aiogram import Bot
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from core.logger import logger
+from core.redis_client import redis_manager
 from models import Chat
+
+# Admin panel entries fan out one get_chat_member per chat: cache the
+# resulting chat list briefly instead of hammering Telegram on every open.
+ADMIN_CHATS_CACHE_TTL = 300
 
 
 def is_superadmin(user_id: int) -> bool:
@@ -59,6 +65,17 @@ async def get_user_administered_chats(
     user_id: int,
 ) -> list[Chat]:
     """Retrieve all chats where the user has administrative privileges."""
+    cache_key = f"warden:admin_chats:{user_id}"
+    try:
+        redis = await redis_manager.get_client()
+        cached = await redis.get(cache_key)
+        if cached:
+            ids = set(json.loads(cached))
+            result = await session.execute(select(Chat).where(Chat.chat_id.in_(ids)))
+            return list(result.scalars().all())
+    except Exception as err:
+        logger.debug(f"Admin chats cache miss for {user_id}: {err}")
+
     result = await session.execute(select(Chat))
     all_chats = result.scalars().all()
 
@@ -82,4 +99,12 @@ async def get_user_administered_chats(
         return None
 
     checked = await asyncio.gather(*(_is_admin(chat_db) for chat_db in all_chats))
-    return [chat_db for chat_db in checked if chat_db is not None]
+    administered = [chat_db for chat_db in checked if chat_db is not None]
+    try:
+        redis = await redis_manager.get_client()
+        await redis.set(
+            cache_key, json.dumps([c.chat_id for c in administered]), ex=ADMIN_CHATS_CACHE_TTL
+        )
+    except Exception as err:
+        logger.debug(f"Admin chats cache store failed for {user_id}: {err}")
+    return administered
